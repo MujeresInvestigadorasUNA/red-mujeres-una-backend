@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routes import auth, users
+from app.routes import auth, users, research_documents, courses  
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -23,6 +23,8 @@ def healthz():
 
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
+app.include_router(research_documents.router, prefix=settings.API_V1_PREFIX)
+app.include_router(courses.router, prefix=settings.API_V1_PREFIX)
 
 @app.on_event("startup")
 def on_startup():
