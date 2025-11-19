@@ -1,3 +1,4 @@
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from app.models.courses import Courses
 from app.schemas.courses import CourseBase, CourseCreate
@@ -16,7 +17,10 @@ class CoursesRepository:
 
     @staticmethod
     def get_by_user_id(db: Session, user_id: int):
-        return db.query(Courses).filter(Courses.user_id == user_id).all()
+        return db.query(Courses)\
+                .filter(Courses.user_id == user_id)\
+                .order_by(desc(Courses.id))\
+                .all()
 
     @staticmethod
     def create(db: Session, payload: CourseCreate):
