@@ -1,12 +1,16 @@
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from app.models.courses import Courses
-from app.schemas.courses import CourseBase, CourseCreate
+from app.schemas.courses import CourseCreate
 
 class CoursesRepository:
     @staticmethod
     def list(db: Session, skip: int = 0, limit: int = 100):
         return db.query(Courses).offset(skip).limit(limit).all()
+    
+    @staticmethod
+    def get_public_courses(db: Session, skip: int = 0, limit: int = 100):
+        return db.query(Courses).filter(Courses.is_public == True).offset(skip).limit(limit).all()
 
     @staticmethod
     def get_by_id(db: Session, course_id: int):

@@ -9,13 +9,17 @@ class CoursesService:
         return CoursesRepository.list(db, skip=skip, limit=limit)
 
     @staticmethod
+    def get_public_courses(db: Session, skip: int = 0, limit: int = 50) -> list[Courses]:
+        return CoursesRepository.get_public_courses(db, skip=skip, limit=limit)
+
+    @staticmethod
     def get_course(db: Session, course_id: int) -> Courses | None:
         return CoursesRepository.get_by_id(db, course_id)
     
     @staticmethod
     def get_user_courses(db: Session, user_id: int) -> list[Courses]:
         return CoursesRepository.get_by_user_id(db, user_id)
-    
+
     @staticmethod
     def create_course(db: Session, payload: CourseCreate) -> dict:
         course = CoursesRepository.create(db, payload)

@@ -9,6 +9,10 @@ class CourseController:
         return CoursesService.list_courses(db, skip, limit)
 
     @staticmethod
+    def get_public_courses(db: Session, skip: int = 0, limit: int = 100):
+        return CoursesService.get_public_courses(db, skip=skip, limit=limit)
+
+    @staticmethod
     def get_course(db: Session, course_id: int):
         try:
             return CoursesService.get_course(db, course_id)

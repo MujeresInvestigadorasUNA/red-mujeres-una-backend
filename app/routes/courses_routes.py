@@ -14,6 +14,14 @@ def list_courses(
 ):
     return CourseController.list_courses(db, skip=skip, limit=limit)
 
+@router.get("/public", response_model=list[CourseBase])
+def get_public_courses(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    return CourseController.get_public_courses(db, skip=skip, limit=limit)
+
 @router.get("/{course_id}", response_model=CourseOut)
 def get_course(course_id: int, db: Session = Depends(get_db)):
     return CourseController.get_course(db, course_id)
