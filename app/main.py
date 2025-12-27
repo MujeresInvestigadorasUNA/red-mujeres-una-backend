@@ -9,8 +9,10 @@ from app.routes.user_types_routes import router as user_types_router
 from app.routes.forums_routes import router as forums_router
 from app.routes.courses_routes import router as courses_router
 
-# Create tables for demo (in real apps, use Alembic migrations)
-Base.metadata.create_all(bind=engine)
+# Do not create tables at import time — run on startup and handle DB errors gracefully
+
+def init_db():
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -28,6 +30,22 @@ app.include_router(users_router)
 app.include_router(user_types_router)
 app.include_router(forums_router)
 app.include_router(courses_router)
+
+
+@app.on_event("startup")
+def _on_startup():
+    import logging
+
+    logger = logging.getLogger("uvicorn.error")
+    try:
+        init_db()
+        app.state.db_connected = True
+        app.state.db_error = None
+        logger.info("Database initialized successfully on startup.")
+    except Exception as e:
+        app.state.db_connected = False
+        app.state.db_error = str(e)
+        logger.error("Database initialization failed on startup: %s", e, exc_info=True)
 
 @app.get("/")
 def health():

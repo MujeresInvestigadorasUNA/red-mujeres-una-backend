@@ -1,0 +1,28 @@
+# === Núcleo web (ASGI) ===
+fastapi>=0.111.0           # Framework web: rutas, validación, OpenAPI/Swagger
+
+# Servidor ASGI (runner)
+uvicorn[standard]>=0.30.0  # Servidor para FastAPI; [standard] trae uvloop/httptools/watchfiles
+
+# === Capa de datos ===
+SQLAlchemy>=2.0.30         # ORM/engine para conectar y consultar la base de datos
+
+# === Esquemas y configuración ===
+pydantic[email]>=2.7.0   # incluye dependencia opcional 'email-validator' para EmailStr            # Modelado/validación de datos (schemas de entrada/salida)
+pydantic-settings>=2.3.0   # Carga de settings desde variables de entorno/.env
+
+# === Autenticación ===
+python-jose>=3.3.0         # Manejo de JWT (firmar/verificar tokens)
+PyJWT>=2.7.0               # Biblioteca 'jwt' (import jwt) usada en app/core/auth.py
+passlib[bcrypt]>=1.7.4     # Hash y verificación de contraseñas con bcrypt
+
+# === Forms/Uploads ===
+python-multipart>=0.0.9    # Soporte multipart/form-data (forms, uploads); opcional si no se usa
+
+# === Drivers de base de datos (elegí según motor) ===
+PyMySQL>=1.1.0             # Driver para MySQL/MariaDB (p. ej., Azure Database for MySQL)
+pyodbc>=5.1.0              # Driver Python ODBC para SQL Server/Azure SQL.
+                           # Nota: además de este paquete, en el SO/imagen Docker hay que instalar
+                           # el "ODBC Driver 18 for SQL Server" de Microsoft; con pip solo no alcanza.
+
+# - Instalación: pip install -r requirements.txt

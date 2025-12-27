@@ -6,7 +6,10 @@ class Users(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_type_id = Column(Integer, ForeignKey("users_types.id", ondelete="SET NULL"), default=1, nullable=False)
+    # SQL Server doesn't allow ON DELETE SET NULL when the column is NOT NULL.
+    # Use NO ACTION for SQL Server compatibility (do not change user_type on delete),
+    # and keep the column non-nullable with a default value.
+    user_type_id = Column(Integer, ForeignKey("users_types.id", ondelete="NO ACTION"), default=1, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     first_name = Column(String(150), nullable=False)
     last_name = Column(String(300), nullable=False)
