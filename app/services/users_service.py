@@ -4,7 +4,17 @@ from app.repositories.forums_repository import ForumsRepository
 from app.schemas.users import UserCreate, UserUpdate
 from app.models.users import Users
 from datetime import timedelta
-from app.core.auth import create_access_token
+from app.core.auth import create_access_token, hash_password, verify_password
+from app.core.config import settings
+from app.services.blob_storage_service import blob_storage_service
+from fastapi import UploadFile, HTTPException, status
+from typing import Optional
+import io
+import os
+import logging
+from azure.core.exceptions import ResourceNotFoundError
+
+logger = logging.getLogger(__name__)
 
 class UsersService:
     @staticmethod
@@ -27,12 +37,206 @@ class UsersService:
         return UsersRepository.get_by_email(db, email)
 
     @staticmethod
+    async def register_user_with_image(
+        db: Session,
+        email: str,
+        password: str,
+        first_name: str,
+        last_name: str,
+        user_type_id: int,
+        photo: Optional[UploadFile] = None
+    ) -> dict:
+        """
+        Registra un usuario CON imagen de perfil.
+        La imagen se sube a Blob Storage y se guarda la URL en BD.
+        """
+        try:
+            # 1. Validar que el email no exista
+            existing = UsersRepository.get_by_email(db, email)
+            if existing:
+                raise ValueError("Email already registered")
+
+            # 2. Validar imagen (sin subir aún)
+            photo_blob_name = None
+            photo_content = None
+            photo_ext = ".jpg"
+
+            if photo:
+                allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+                if photo.content_type not in allowed_types:
+                    raise ValueError(f"Invalid image type. Allowed: {', '.join(allowed_types)}")
+
+                max_size = 5 * 1024 * 1024  # 5MB
+                photo_content = await photo.read()
+                if len(photo_content) > max_size:
+                    raise ValueError("Image too large. Max 5MB")
+
+                photo_ext = os.path.splitext(photo.filename)[1] or ".jpg"
+
+            # 3. Crear usuario en BD (aún sin foto) para obtener el ID
+            user = Users(
+                email=email,
+                password=hash_password(password),
+                first_name=first_name,
+                last_name=last_name,
+                user_type_id=user_type_id,
+                photo=None,
+            )
+
+            db.add(user)
+            db.flush()  # obtiene user.id sin commit
+
+            # 4. Si es investigadora, crear registro en forums (en la misma transacción)
+            if user_type_id == 2:
+                ForumsRepository.create(
+                    db,
+                    user_id=user.id,
+                    user_profession=None,
+                    user_description=None
+                )
+
+            # 5. Subir la foto (si se envió) con nombre determinístico
+            if photo_content:
+                subfolder = f"users/{user.id}/"
+                fixed_blob_name = f"profile_picture{photo_ext}"
+                photo_file = io.BytesIO(photo_content)
+
+                upload_result = blob_storage_service.upload_file(
+                    file_content=photo_file,
+                    file_name=photo.filename,
+                    container_type="images",
+                    metadata={"type": "profile", "user_id": str(user.id)},
+                    subfolder=subfolder,
+                    fixed_blob_name=fixed_blob_name,
+                )
+
+                photo_blob_name = upload_result["blob_name"]
+                user.photo = upload_result["url"]
+
+            # 6. Confirmar transacción
+            db.commit()
+            db.refresh(user)
+
+            # 7. Generar token JWT
+            access_token = create_access_token(
+                data={"sub": user.email},
+                expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            )
+
+            return {
+                "success": True,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "photo_url": user.photo,
+                    "user_type_id": user.user_type_id
+                },
+                "access_token": access_token
+            }
+
+        except ValueError as e:
+            db.rollback()
+            raise e
+        except Exception as e:
+            db.rollback()
+            # Si falló el registro, eliminar la imagen si se subió
+            if photo_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=photo_blob_name,
+                        container_type="images"
+                    )
+                except:
+                    pass  # Ignorar si no se puede eliminar
+            
+            raise Exception(f"Error registering user: {str(e)}")
+
+    @staticmethod
+    async def update_user_profile_picture(
+        db: Session,
+        user_id: int,
+        photo: UploadFile
+    ) -> dict:
+        """
+        Actualiza SOLO la foto de perfil de un usuario existente.
+        Elimina la foto anterior si existe para evitar acumular imágenes sin usar.
+        """
+        try:
+            # 1. Obtener usuario
+            user = UsersRepository.get_by_id(db, user_id)
+            if not user:
+                raise ValueError("User not found")
+
+            # 2. Validar imagen
+            allowed_types = {"image/jpeg", "image/png", "image/webp"}
+            if photo.content_type not in allowed_types:
+                raise ValueError("Invalid image type")
+
+            max_size = 5 * 1024 * 1024
+            photo_content = await photo.read()
+            if len(photo_content) > max_size:
+                raise ValueError("Image too large. Max 5MB")
+
+            # Nombre de blob determinístico para esta foto de perfil
+            ext = os.path.splitext(photo.filename)[1] or ".jpg"
+            subfolder = f"users/{user_id}/"
+            fixed_blob_name = f"profile_picture{ext}"
+            full_blob_name = f"{subfolder.rstrip('/')}/{fixed_blob_name}"
+
+            # 3. Eliminar foto anterior determinísticamente (mismo nombre)
+            try:
+                blob_storage_service.delete_file(
+                    blob_name=full_blob_name,
+                    container_type="images"
+                )
+                logger.info(f"Foto anterior de usuario {user_id} eliminada: {full_blob_name}")
+            except ResourceNotFoundError:
+                # Si no existe, no es un error; se continuará con la subida nueva
+                logger.debug(f"Foto anterior no encontrada para usuario {user_id}, se continuará con la nueva carga")
+            except Exception as e:
+                logger.warning(f"No se pudo eliminar foto anterior de usuario {user_id}: {str(e)}")
+
+            # 4. Subir nueva foto
+            photo_file = io.BytesIO(photo_content)
+            upload_result = blob_storage_service.upload_file(
+                file_content=photo_file,
+                file_name=photo.filename,
+                container_type="images",
+                metadata={"type": "profile", "user_id": str(user_id)},
+                subfolder=subfolder,
+                fixed_blob_name=fixed_blob_name,
+            )
+
+            # 5. Actualizar usuario
+            user.photo = upload_result["url"]
+            db.commit()
+            db.refresh(user)
+
+            return {
+                "success": True,
+                "user_id": user.id,
+                "photo_url": user.photo,
+                "message": "Profile picture updated successfully"
+            }
+
+        except ValueError as e:
+            db.rollback()
+            raise e
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error updating profile picture: {str(e)}")
+
+    @staticmethod
     def create_user(db: Session, payload: UserCreate) -> dict:
         # Business rule example: unique email
         existing = UsersRepository.get_by_email(db, payload.email)
         if existing:
             raise ValueError("Email already registered")
     
+        # Hash password before creating user
+        payload.password = hash_password(payload.password)
         user = UsersRepository.create(db, payload)
 
         # Persist the user to ensure the generated id is available
@@ -63,6 +267,9 @@ class UsersService:
             other = UsersRepository.get_by_email(db, payload.email)
             if other and other.id != user_id:
                 raise ValueError("Email already registered to another user")
+        
+        # Hash password if being updated
+        password_to_save = hash_password(payload.password) if payload.password else None
             
         print(payload.user_type_id, payload.profession)
         if payload.user_type_id == 2 and payload.profession:
@@ -81,7 +288,7 @@ class UsersService:
             email=payload.email,
             first_name=payload.first_name,
             last_name=payload.last_name,
-            password=payload.password,
+            password=password_to_save,
             photo=payload.photo
         )
 
@@ -97,7 +304,9 @@ class UsersService:
     def login(db: Session, user_login) -> dict:
         # Check if the user exists
         user = UsersService.get_by_email(db, user_login.email)
-        if user is None or user.password != user_login.password:
+        
+        # Verify password (using bcrypt)
+        if user is None or not verify_password(user_login.password, user.password):
             raise ValueError("Invalid credentials")
 
         # Create the JWT token

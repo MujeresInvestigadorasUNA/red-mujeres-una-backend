@@ -1,7 +1,10 @@
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from app.services.users_service import UsersService
 from app.schemas.users import UserCreate, UserUpdate
+from typing import Optional
+import io
+
 
 class UserController:
     @staticmethod
@@ -23,6 +26,56 @@ class UserController:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail="Internal Server Error" + str(e))
+
+    @staticmethod
+    async def register_with_photo(
+        db: Session,
+        email: str,
+        password: str,
+        first_name: str,
+        last_name: str,
+        user_type_id: int,
+        photo: Optional[UploadFile] = None
+    ):
+        """
+        Registra un usuario CON imagen de perfil.
+        """
+        try:
+            return await UsersService.register_user_with_image(
+                db=db,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+                user_type_id=user_type_id,
+                photo=photo
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e)
+            )
+
+    @staticmethod
+    async def update_profile_picture(
+        db: Session,
+        user_id: int,
+        photo: UploadFile = File(...)
+    ):
+        """
+        Actualiza la foto de perfil de un usuario.
+        """
+        try:
+            return await UsersService.update_user_profile_picture(db, user_id, photo)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e)
+            )
 
     @staticmethod
     def update_user(db: Session, user_id: int, user: UserUpdate):

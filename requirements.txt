@@ -14,7 +14,8 @@ pydantic-settings>=2.3.0   # Carga de settings desde variables de entorno/.env
 # === Autenticación ===
 python-jose>=3.3.0         # Manejo de JWT (firmar/verificar tokens)
 PyJWT>=2.7.0               # Biblioteca 'jwt' (import jwt) usada en app/core/auth.py
-passlib[bcrypt]>=1.7.4     # Hash y verificación de contraseñas con bcrypt
+passlib>=1.7.4             # Hash y verificación de contraseñas
+bcrypt>=4.0.1,<5.0.0       # Backend de bcrypt (compatible con passlib 1.7.4)
 
 # === Forms/Uploads ===
 python-multipart>=0.0.9    # Soporte multipart/form-data (forms, uploads); opcional si no se usa
@@ -24,5 +25,9 @@ PyMySQL>=1.1.0             # Driver para MySQL/MariaDB (p. ej., Azure Database f
 pyodbc>=5.1.0              # Driver Python ODBC para SQL Server/Azure SQL.
                            # Nota: además de este paquete, en el SO/imagen Docker hay que instalar
                            # el "ODBC Driver 18 for SQL Server" de Microsoft; con pip solo no alcanza.
+
+# === Azure Cloud Services ===
+azure-storage-blob>=12.19.0 # Cliente de Azure Blob Storage para upload/download de documentos e imágenes
+azure-identity>=1.14.0      # Autenticación para servicios de Azure
 
 # - Instalación: pip install -r requirements.txt
