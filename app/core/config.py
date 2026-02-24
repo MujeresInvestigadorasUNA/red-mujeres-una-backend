@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     AZURE_BLOB_CONTAINER_VECTORIZED: str = Field("vectorized-documents", validation_alias="AZURE_BLOB_CONTAINER_VECTORIZED")
     MAX_UPLOAD_SIZE_MB: int = Field(50, validation_alias="MAX_UPLOAD_SIZE_MB")
 
+    # Azure OpenAI (Embeddings)
+    AZURE_OPENAI_ENDPOINT: str | None = Field(None, validation_alias="AZURE_OPENAI_ENDPOINT")
+    AZURE_OPENAI_API_KEY: str | None = Field(None, validation_alias="AZURE_OPENAI_API_KEY")
+    AZURE_OPENAI_API_VERSION: str = Field("2024-02-01", validation_alias="AZURE_OPENAI_API_VERSION")
+    AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str | None = Field(None, validation_alias="AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
+
     class Config:
         env_file = ".env"
         extra = "ignore"

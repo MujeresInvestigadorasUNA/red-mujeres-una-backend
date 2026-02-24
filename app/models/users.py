@@ -24,3 +24,6 @@ class Users(Base):
 
     # Relationship to Courses
     courses = relationship("Courses", back_populates="user")
+
+    # Relationship to Research
+    researches = relationship("Research", back_populates="user")

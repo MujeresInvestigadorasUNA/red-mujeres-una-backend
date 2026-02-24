@@ -30,4 +30,10 @@ pyodbc>=5.1.0              # Driver Python ODBC para SQL Server/Azure SQL.
 azure-storage-blob>=12.19.0 # Cliente de Azure Blob Storage para upload/download de documentos e imágenes
 azure-identity>=1.14.0      # Autenticación para servicios de Azure
 
+# === Azure OpenAI / Embeddings ===
+openai>=1.40.0              # SDK oficial para Azure OpenAI (Embeddings)
+
+# === PDF extraction ===
+pypdf>=4.2.0                # Extracción de texto de PDFs
+
 # - Instalación: pip install -r requirements.txt

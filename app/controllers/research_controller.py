@@ -1,0 +1,50 @@
+from fastapi import HTTPException, status, UploadFile
+from sqlalchemy.orm import Session
+from app.services.research_service import ResearchService
+
+
+class ResearchController:
+    @staticmethod
+    def list_research(db: Session, skip: int = 0, limit: int = 100):
+        return ResearchService.list_research(db, skip=skip, limit=limit)
+
+    @staticmethod
+    def get_research(db: Session, research_id: int):
+        try:
+            return ResearchService.get_research(db, research_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_user_research(db: Session, user_id: int):
+        return ResearchService.get_user_research(db, user_id)
+
+    @staticmethod
+    async def create_research(
+        db: Session,
+        user_id: int,
+        title: str,
+        document: UploadFile,
+    ):
+        try:
+            return await ResearchService.create_research_with_pdf(
+                db=db,
+                user_id=user_id,
+                title=title,
+                document=document,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e),
+            )
+
+    @staticmethod
+    def delete_research(db: Session, research_id: int):
+        if not ResearchService.delete_research(db, research_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research not found")
+        return {"status": "ok"}
