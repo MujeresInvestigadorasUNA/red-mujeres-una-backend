@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.db import Base, engine
-from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.users_routes import router as users_router
@@ -15,7 +14,14 @@ from app.routes.research_routes import router as research_router
 def init_db():
     Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title=settings.APP_NAME)
+is_dev_environment = (settings.ENV or "").strip().lower() == "dev"
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    docs_url="/docs" if is_dev_environment else None,
+    redoc_url="/redoc" if is_dev_environment else None,
+    openapi_url="/openapi.json" if is_dev_environment else None,
+)
 
 # Add CORS middleware
 app.add_middleware(
