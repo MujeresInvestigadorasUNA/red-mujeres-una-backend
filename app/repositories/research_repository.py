@@ -19,6 +19,10 @@ class ResearchRepository:
         return db.query(Research).filter(Research.user_id == user_id).all()
 
     @staticmethod
+    def list_all(db: Session):
+        return db.query(Research).all()
+
+    @staticmethod
     def create(
         db: Session,
         user_id: int,

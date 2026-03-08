@@ -42,6 +42,7 @@ POST /api/v1/auth/login → token JWT
 GET /api/v1/users/me → perfil (requiere Bearer)
 GET /api/v1/users/ → listado (requiere Bearer)
 PATCH /api/v1/users/me → actualizar (requiere Bearer)
+GET /research/{research_id}/related?limit=5 → documentos relacionados por similitud vectorial
 
 ## Base de datos
 Local: SQLite (por defecto)

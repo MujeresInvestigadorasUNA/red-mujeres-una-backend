@@ -30,3 +30,12 @@ class ResearchDetailsOut(ResearchBase):
 
     class Config:
         from_attributes = True
+
+
+class RelatedResearchOut(BaseModel):
+    id: Optional[int] = None
+    title: str
+    user_id: Optional[int] = None
+    research_link: Optional[str] = None
+    vector_blob_name: str
+    similarity_score: float
