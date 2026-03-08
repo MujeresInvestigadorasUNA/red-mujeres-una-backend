@@ -1,6 +1,9 @@
 from fastapi import HTTPException, status, UploadFile
+import logging
 from sqlalchemy.orm import Session
 from app.services.research_service import ResearchService
+
+logger = logging.getLogger(__name__)
 
 
 class ResearchController:
@@ -22,6 +25,44 @@ class ResearchController:
         return ResearchService.get_user_research(db, user_id)
 
     @staticmethod
+    def get_related_research(db: Session, research_id: int, limit: int = 5):
+        try:
+            return ResearchService.get_related_research(db, research_id=research_id, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def create_research_sync(
+        db: Session,
+        user_id: int,
+        title: str,
+        document_bytes: bytes,
+        document_filename: str,
+        document_content_type: str,
+    ):
+        try:
+            return ResearchService.create_research_with_pdf_sync(
+                db=db,
+                user_id=user_id,
+                title=title,
+                document_bytes=document_bytes,
+                document_filename=document_filename,
+                document_content_type=document_content_type,
+            )
+        except ValueError as e:
+            logger.warning(f"Validation error: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            error_detail = str(e) if str(e) else repr(e)
+            logger.error(f"Error in create_research: {error_detail}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_detail,
+            )
+
+    @staticmethod
     async def create_research(
         db: Session,
         user_id: int,
@@ -36,11 +77,14 @@ class ResearchController:
                 document=document,
             )
         except ValueError as e:
+            logger.warning(f"Validation error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
+            error_detail = str(e) if str(e) else repr(e)
+            logger.error(f"Error in create_research: {error_detail}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=str(e),
+                detail=error_detail,
             )
 
     @staticmethod

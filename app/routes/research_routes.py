@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.controllers.research_controller import ResearchController
-from app.schemas.research import ResearchDetailsOut, ResearchCreateResponse
+from app.schemas.research import ResearchDetailsOut, ResearchCreateResponse, RelatedResearchOut
 
 router = APIRouter(prefix="/research", tags=["research"])
 
@@ -26,6 +26,15 @@ def get_research(research_id: int, db: Session = Depends(get_db)):
     return ResearchController.get_research(db, research_id)
 
 
+@router.get("/{research_id}/related", response_model=list[RelatedResearchOut])
+def get_related_research(
+    research_id: int,
+    limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_related_research(db, research_id=research_id, limit=limit)
+
+
 @router.post("/", response_model=ResearchCreateResponse)
 async def create_research(
     user_id: int = Form(...),
@@ -33,11 +42,17 @@ async def create_research(
     document: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    return await ResearchController.create_research(
+    # Lee el archivo en async context
+    pdf_bytes = await document.read()
+    
+    # Llama al controller de forma síncrona
+    return ResearchController.create_research_sync(
         db=db,
         user_id=user_id,
         title=title,
-        document=document,
+        document_bytes=pdf_bytes,
+        document_filename=document.filename,
+        document_content_type=document.content_type,
     )
 
 
