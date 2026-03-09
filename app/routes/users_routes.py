@@ -77,7 +77,12 @@ async def update_profile_picture(
     return await UserController.update_profile_picture(db, user_id, photo)
 
 @router.put("/{user_id}", response_model=UserUpdateResponse)
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    _: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
     return UserController.update_user(db, user_id, payload)
 
 @router.delete("/{user_id}")
