@@ -6,6 +6,9 @@ class UserBase(BaseModel):
     first_name: str
     last_name: str
     photo: Optional[str] = None
+    user_profession: Optional[str] = None
+    user_description: Optional[str] = None
+    is_public: Optional[bool] = False
 
 class UserCreate(UserBase):
     email: EmailStr
@@ -18,7 +21,9 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     password: Optional[str] = None
     photo: Optional[str] = None
-    profession: Optional[str] = None
+    user_profession: Optional[str] = None
+    user_description: Optional[str] = None
+    is_public: Optional[bool] = None
     user_type_id: Optional[int] = None
 
 class UserUpdateResponse(BaseModel):
@@ -44,7 +49,6 @@ class UsersDetailsOut(UserBase):
     id: int
     user_type_id: int
     password: str
-    profession: Optional[str] = None
 
     class Config:
         from_attributes = True

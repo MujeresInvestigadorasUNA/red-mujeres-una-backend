@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from app.repositories.users_repository import UsersRepository
-from app.repositories.forums_repository import ForumsRepository
 from app.schemas.users import UserCreate, UserUpdate
 from app.models.users import Users
 from datetime import timedelta
@@ -24,12 +23,6 @@ class UsersService:
     @staticmethod
     def get_user(db: Session, user_id: int) -> Users | None:
         user = UsersRepository.get_by_id(db, user_id)
-
-        if user.user_type_id == 2:
-            forum = ForumsRepository.get_by_user_id(db, user_id)
-            if forum:
-                user.profession = forum.user_profession
-
         return user
     
     @staticmethod
@@ -44,7 +37,10 @@ class UsersService:
         first_name: str,
         last_name: str,
         user_type_id: int,
-        photo: Optional[UploadFile] = None
+        photo: Optional[UploadFile] = None,
+        user_profession: Optional[str] = None,
+        user_description: Optional[str] = None,
+        is_public: bool = False
     ) -> dict:
         """
         Registra un usuario CON imagen de perfil.
@@ -81,21 +77,15 @@ class UsersService:
                 last_name=last_name,
                 user_type_id=user_type_id,
                 photo=None,
+                user_profession=user_profession,
+                user_description=user_description,
+                is_public=is_public
             )
 
             db.add(user)
             db.flush()  # obtiene user.id sin commit
 
-            # 4. Si es investigadora, crear registro en forums (en la misma transacción)
-            if user_type_id == 2:
-                ForumsRepository.create(
-                    db,
-                    user_id=user.id,
-                    user_profession=None,
-                    user_description=None
-                )
-
-            # 5. Subir la foto (si se envió) con nombre determinístico
+            # 4. Subir la foto (si se envió) con nombre determinístico
             if photo_content:
                 subfolder = f"users/{user.id}/"
                 fixed_blob_name = f"profile_picture{photo_ext}"
@@ -113,11 +103,11 @@ class UsersService:
                 photo_blob_name = upload_result["blob_name"]
                 user.photo = upload_result["url"]
 
-            # 6. Confirmar transacción
+            # 5. Confirmar transacción
             db.commit()
             db.refresh(user)
 
-            # 7. Generar token JWT
+            # 6. Generar token JWT
             access_token = create_access_token(
                 data={"sub": user.email},
                 expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -243,14 +233,6 @@ class UsersService:
         db.commit()
         db.refresh(user)
 
-        if payload.user_type_id == 2:
-            ForumsRepository.create(
-                db,
-                user_id=user.id,
-                user_profession=None,
-                user_description=None
-            )
-
         # Create the JWT token
         access_token_expires = timedelta(minutes=30)
         access_token = create_access_token(
@@ -270,17 +252,6 @@ class UsersService:
         
         # Hash password if being updated
         password_to_save = hash_password(payload.password) if payload.password else None
-            
-        print(payload.user_type_id, payload.profession)
-        if payload.user_type_id == 2 and payload.profession:
-            print('asasdd')
-            ForumsRepository.update(
-                db,
-                forum_id=user_id,
-                user_profession=payload.profession,
-                user_description=None,
-                is_public=None
-            )
 
         return UsersRepository.update(
             db,
@@ -289,7 +260,10 @@ class UsersService:
             first_name=payload.first_name,
             last_name=payload.last_name,
             password=password_to_save,
-            photo=payload.photo
+            photo=payload.photo,
+            user_profession=payload.user_profession,
+            user_description=payload.user_description,
+            is_public=payload.is_public
         )
 
     @staticmethod

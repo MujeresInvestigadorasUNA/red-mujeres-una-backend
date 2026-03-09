@@ -4,7 +4,7 @@ from app.models.user_types import UserType
 class UserTypeRepository:
     @staticmethod
     def get_all(db: Session, skip: int = 0, limit: int = 100):
-        return db.query(UserType).offset(skip).limit(limit).all()
+        return db.query(UserType).order_by(UserType.id).offset(skip).limit(limit).all()
 
     @staticmethod
     def get_by_id(db: Session, user_type_id: int):

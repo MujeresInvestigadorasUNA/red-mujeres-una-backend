@@ -5,7 +5,7 @@ from app.models.research import Research
 class ResearchRepository:
     @staticmethod
     def list(db: Session, skip: int = 0, limit: int = 100):
-        return db.query(Research).offset(skip).limit(limit).all()
+        return db.query(Research).order_by(Research.id).offset(skip).limit(limit).all()
 
     @staticmethod
     def get_by_id(db: Session, research_id: int):

@@ -35,7 +35,10 @@ class UserController:
         first_name: str,
         last_name: str,
         user_type_id: int,
-        photo: Optional[UploadFile] = None
+        photo: Optional[UploadFile] = None,
+        user_profession: Optional[str] = None,
+        user_description: Optional[str] = None,
+        is_public: bool = False
     ):
         """
         Registra un usuario CON imagen de perfil.
@@ -48,7 +51,10 @@ class UserController:
                 first_name=first_name,
                 last_name=last_name,
                 user_type_id=user_type_id,
-                photo=photo
+                photo=photo,
+                user_profession=user_profession,
+                user_description=user_description,
+                is_public=is_public
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

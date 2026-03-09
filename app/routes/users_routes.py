@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from app.core.db import get_db
+from app.core.auth import require_token
 from app.controllers.users_controller import UserController
 from app.schemas.users import UserCreate, UserUpdate, UserOut, UsersDetailsOut, UserLogin, UserLoginResponse, UserUpdateResponse
 from typing import Optional
@@ -11,6 +12,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    _: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
     return UserController.list_users(db, skip=skip, limit=limit)
@@ -27,6 +29,9 @@ async def register_user_with_photo(
     last_name: str = Form(...),
     user_type_id: int = Form(...),
     photo: Optional[UploadFile] = File(None),
+    user_profession: Optional[str] = Form(None),
+    user_description: Optional[str] = Form(None),
+    is_public: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     """
@@ -39,6 +44,9 @@ async def register_user_with_photo(
     - last_name (texto)
     - user_type_id (número)
     - photo (archivo - opcional)
+    - user_profession (texto - opcional)
+    - user_description (texto - opcional)
+    - is_public (booleano - opcional, default: false)
     """
     return await UserController.register_with_photo(
         db=db,
@@ -47,7 +55,10 @@ async def register_user_with_photo(
         first_name=first_name,
         last_name=last_name,
         user_type_id=user_type_id,
-        photo=photo
+        photo=photo,
+        user_profession=user_profession,
+        user_description=user_description,
+        is_public=is_public
     )
 
 @router.post("/", response_model=UserOut, status_code=201)

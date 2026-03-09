@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.users_routes import router as users_router
 from app.routes.user_types_routes import router as user_types_router
-from app.routes.forums_routes import router as forums_router
 from app.routes.courses_routes import router as courses_router
 from app.routes.research_routes import router as research_router
 
@@ -35,7 +34,6 @@ app.add_middleware(
 # Mount routes
 app.include_router(users_router)
 app.include_router(user_types_router)
-app.include_router(forums_router)
 app.include_router(courses_router)
 app.include_router(research_router)
 

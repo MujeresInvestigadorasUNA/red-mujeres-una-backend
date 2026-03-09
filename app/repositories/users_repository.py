@@ -5,7 +5,7 @@ from app.schemas.users import UserCreate
 class UsersRepository:
     @staticmethod
     def list(db: Session, skip: int = 0, limit: int = 100):
-        return db.query(Users).offset(skip).limit(limit).all()
+        return db.query(Users).order_by(Users.id).offset(skip).limit(limit).all()
 
     @staticmethod
     def get_by_id(db: Session, user_id: int):
@@ -25,14 +25,17 @@ class UsersRepository:
             first_name=payload.first_name, 
             last_name=payload.last_name, 
             password=payload.password, 
-            user_type_id=payload.user_type_id
+            user_type_id=payload.user_type_id,
+            user_profession=payload.user_profession,
+            user_description=payload.user_description,
+            is_public=payload.is_public if payload.is_public is not None else False
         )
         db.add(user)
         db.flush()
         return user
 
     @staticmethod
-    def update(db: Session, user_id: int, email: str, first_name: str, last_name: str, password: str, photo: str):
+    def update(db: Session, user_id: int, email: str, first_name: str, last_name: str, password: str, photo: str, user_profession: str = None, user_description: str = None, is_public: bool = None):
         user = db.query(Users).filter(Users.id == user_id).first()
         if not user:
             raise ValueError("User not found")
@@ -42,6 +45,13 @@ class UsersRepository:
         user.last_name = last_name or user.last_name
         user.password = password or user.password
         user.photo = photo
+        
+        if user_profession is not None:
+            user.user_profession = user_profession
+        if user_description is not None:
+            user.user_description = user_description
+        if is_public is not None:
+            user.is_public = is_public
         
         db.commit()
         db.refresh(user)

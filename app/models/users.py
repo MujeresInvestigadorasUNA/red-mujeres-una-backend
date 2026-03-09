@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 
@@ -15,12 +15,12 @@ class Users(Base):
     last_name = Column(String(300), nullable=False)
     password = Column(String(255), nullable=False)
     photo = Column(String(255))
+    user_profession = Column(String(255), nullable=True)
+    user_description = Column(String(500), nullable=True)
+    is_public = Column(Boolean, default=False, nullable=False)
 
     # Define relationship to UserType
     user_type = relationship("UserType", back_populates="users")
-
-    # Relationship to Forums
-    forum = relationship("Forums", back_populates="user", uselist=False)
 
     # Relationship to Courses
     courses = relationship("Courses", back_populates="user")
