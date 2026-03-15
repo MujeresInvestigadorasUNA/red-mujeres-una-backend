@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = Field("2024-02-01", validation_alias="AZURE_OPENAI_API_VERSION")
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str | None = Field(None, validation_alias="AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
 
+    # Qdrant
+    QDRANT_ENDPOINT: str | None = Field(None, validation_alias="QDRANT_ENDPOINT")
+    QDRANT_API_KEY: str | None = Field(None, validation_alias="QDRANT_API_KEY")
+    QDRANT_RESEARCH_COLLECTION: str = Field("research-embeddings", validation_alias="QDRANT_RESEARCH_COLLECTION")
+    QDRANT_TIMEOUT_SECONDS: int = Field(30, validation_alias="QDRANT_TIMEOUT_SECONDS")
+
     class Config:
         env_file = ".env"
         extra = "ignore"

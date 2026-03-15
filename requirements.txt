@@ -32,6 +32,7 @@ azure-identity>=1.14.0      # Autenticación para servicios de Azure
 
 # === Azure OpenAI / Embeddings ===
 openai>=1.40.0              # SDK oficial para Azure OpenAI (Embeddings)
+qdrant-client>=1.10.1       # Cliente oficial de Qdrant para almacenar y consultar embeddings
 
 # === PDF extraction ===
 pypdf>=4.2.0                # Extracción de texto de PDFs
