@@ -18,6 +18,7 @@ from app.models.research import Research
 from app.repositories.research_repository import ResearchRepository
 from app.repositories.users_repository import UsersRepository
 from app.services.blob_storage_service import blob_storage_service
+from app.services.qdrant_service import qdrant_service
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,29 @@ class ResearchService:
         return dot_product / (math.sqrt(norm_a) * math.sqrt(norm_b))
 
     @staticmethod
+    def _sync_research_embeddings_to_qdrant(
+        research_id: int,
+        user_id: int,
+        title: str,
+        research_link: str,
+        vector_link: str,
+        chunks: List[str],
+        embeddings: List[List[float]],
+        created_at: str,
+    ) -> None:
+        qdrant_service.upsert_research_embeddings(
+            research_id=research_id,
+            user_id=user_id,
+            title=title,
+            research_link=research_link,
+            vector_link=vector_link,
+            chunks=chunks,
+            embeddings=embeddings,
+            embedding_model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+            created_at=created_at,
+        )
+
+    @staticmethod
     def get_related_research(db: Session, research_id: int, limit: int = 5) -> list[dict]:
         source_research = ResearchRepository.get_by_id(db, research_id)
         source_blob_name = ResearchService._extract_blob_name_from_url(source_research.vector_link)
@@ -312,10 +336,11 @@ class ResearchService:
             chunks = ResearchService._chunk_text(extracted_text)
             embeddings = ResearchService._generate_embeddings(chunks)
 
+            vector_created_at = datetime.utcnow().isoformat()
             vector_payload = {
                 "user_id": user_id,
                 "title": title,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": vector_created_at,
                 "text_length": len(extracted_text),
                 "embedding_model": settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
                 "chunks": chunks,
@@ -341,6 +366,18 @@ class ResearchService:
                 research_link=pdf_upload["url"],
                 vector_link=vector_upload["url"],
             )
+
+            ResearchService._sync_research_embeddings_to_qdrant(
+                research_id=research.id,
+                user_id=user_id,
+                title=title,
+                research_link=pdf_upload["url"],
+                vector_link=vector_upload["url"],
+                chunks=chunks,
+                embeddings=embeddings,
+                created_at=vector_created_at,
+            )
+
             db.commit()
             db.refresh(research)
 
@@ -425,10 +462,11 @@ class ResearchService:
             chunks = ResearchService._chunk_text(extracted_text)
             embeddings = ResearchService._generate_embeddings(chunks)
 
+            vector_created_at = datetime.utcnow().isoformat()
             vector_payload = {
                 "user_id": user_id,
                 "title": title,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": vector_created_at,
                 "text_length": len(extracted_text),
                 "embedding_model": settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
                 "chunks": chunks,
@@ -454,6 +492,18 @@ class ResearchService:
                 research_link=pdf_upload["url"],
                 vector_link=vector_upload["url"],
             )
+
+            ResearchService._sync_research_embeddings_to_qdrant(
+                research_id=research.id,
+                user_id=user_id,
+                title=title,
+                research_link=pdf_upload["url"],
+                vector_link=vector_upload["url"],
+                chunks=chunks,
+                embeddings=embeddings,
+                created_at=vector_created_at,
+            )
+
             db.commit()
             db.refresh(research)
 
