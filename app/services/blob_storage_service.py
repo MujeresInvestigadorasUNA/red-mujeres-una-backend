@@ -5,6 +5,8 @@ Se usa internamente dentro de otros servicios (users_service, courses_service, e
 
 import io
 import os
+import re
+import unicodedata
 from datetime import datetime
 from typing import BinaryIO, Optional
 from azure.storage.blob import BlobServiceClient, ContainerClient
@@ -63,6 +65,42 @@ class BlobStorageService:
             logger.error(f"Error accediendo contenedor {container_name}: {e}")
             raise
 
+    @staticmethod
+    def _sanitize_metadata_key(key: str) -> str:
+        """Normaliza claves de metadata para Azure Blob (ASCII + [a-z0-9_])."""
+        normalized = unicodedata.normalize("NFKD", str(key)).encode("ascii", "ignore").decode("ascii")
+        normalized = normalized.lower().strip().replace("-", "_").replace(" ", "_")
+        normalized = re.sub(r"[^a-z0-9_]", "", normalized)
+        if not normalized:
+            normalized = "meta"
+        if not (normalized[0].isalpha() or normalized[0] == "_"):
+            normalized = f"m_{normalized}"
+        return normalized[:128]
+
+    @staticmethod
+    def _sanitize_metadata_value(value: object) -> str:
+        """Convierte valores de metadata a ASCII seguro para headers HTTP de Azure."""
+        normalized = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
+        normalized = normalized.replace("\r", " ").replace("\n", " ").strip()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized[:1024]
+
+    def _sanitize_metadata(self, metadata: Optional[dict]) -> dict:
+        """Sanitiza metadata y evita colisiones de claves tras normalizacion."""
+        if not metadata:
+            return {}
+
+        sanitized = {}
+        collisions = {}
+        for raw_key, raw_value in metadata.items():
+            key = self._sanitize_metadata_key(raw_key)
+            if key in sanitized:
+                collisions[key] = collisions.get(key, 0) + 1
+                key = f"{key}_{collisions[key]}"
+            sanitized[key] = self._sanitize_metadata_value(raw_value)
+
+        return sanitized
+
     def upload_file(
         self,
         file_content: BinaryIO,
@@ -110,10 +148,10 @@ class BlobStorageService:
                 blob_name = f"{subfolder}{base_name}_{timestamp}{ext}"
 
             # Prepara metadata
-            blob_metadata = metadata or {}
+            blob_metadata = self._sanitize_metadata(metadata)
             blob_metadata.update({
-                "original_name": file_name,
-                "uploaded_at": timestamp,
+                "original_name": self._sanitize_metadata_value(file_name),
+                "uploaded_at": self._sanitize_metadata_value(timestamp),
             })
 
             # Sube el blob
