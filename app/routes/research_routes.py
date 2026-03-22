@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.controllers.research_controller import ResearchController
-from app.schemas.research import ResearchDetailsOut, ResearchCreateResponse, RelatedResearchOut
+from app.schemas.research import (
+    ResearchDetailsOut,
+    ResearchCreateResponse,
+    RelatedResearchOut,
+    ResearchVisitRegisterOut,
+    ResearchRecentVisitOut,
+)
 
 router = APIRouter(prefix="/research", tags=["research"])
 
@@ -33,6 +39,33 @@ def get_related_research(
     db: Session = Depends(get_db),
 ):
     return ResearchController.get_related_research(db, research_id=research_id, limit=limit)
+
+
+@router.post("/user/{user_id}/visits/{research_id}", response_model=ResearchVisitRegisterOut)
+def register_research_visit(
+    user_id: int,
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    return ResearchController.register_research_visit(db, user_id=user_id, research_id=research_id)
+
+
+@router.get("/user/{user_id}/visits", response_model=list[ResearchRecentVisitOut])
+def list_recent_research_visits(
+    user_id: int,
+    limit: int = Query(5, ge=1, le=5),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_recent_research_visits(db, user_id=user_id, limit=limit)
+
+
+@router.get("/user/{user_id}/related-from-visits", response_model=list[RelatedResearchOut])
+def get_related_research_from_recent_visits(
+    user_id: int,
+    limit: int = Query(4, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_related_research_from_recent_visits(db, user_id=user_id, limit=limit)
 
 
 @router.post("/", response_model=ResearchCreateResponse)

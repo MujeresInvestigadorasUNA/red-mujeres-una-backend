@@ -34,6 +34,33 @@ class ResearchController:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
+    def register_research_visit(db: Session, user_id: int, research_id: int):
+        try:
+            return ResearchService.register_research_visit(db, user_id=user_id, research_id=research_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_recent_research_visits(db: Session, user_id: int, limit: int = 5):
+        try:
+            return ResearchService.get_recent_research_visits(db, user_id=user_id, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_related_research_from_recent_visits(db: Session, user_id: int, limit: int = 4):
+        try:
+            return ResearchService.get_related_research_from_recent_visits(db, user_id=user_id, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
     def create_research_sync(
         db: Session,
         user_id: int,

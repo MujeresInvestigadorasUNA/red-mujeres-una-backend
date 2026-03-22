@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 
 class ResearchBase(BaseModel):
@@ -39,3 +40,19 @@ class RelatedResearchOut(BaseModel):
     research_link: Optional[str] = None
     vector_blob_name: str
     similarity_score: float
+
+
+class ResearchVisitRegisterOut(BaseModel):
+    success: bool
+    user_id: int
+    research_id: int
+    visited_at: datetime
+    removed_old_visits: int
+
+
+class ResearchRecentVisitOut(BaseModel):
+    research_id: int
+    title: str
+    user_id: int
+    research_link: str
+    visited_at: datetime

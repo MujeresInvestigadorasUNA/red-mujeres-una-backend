@@ -13,3 +13,4 @@ class Research(Base):
     title = Column(String(255), nullable=False)
 
     user = relationship("Users", back_populates="researches")
+    visits = relationship("ResearchVisit", back_populates="research")

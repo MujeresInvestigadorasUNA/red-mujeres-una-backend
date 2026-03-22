@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.research import Research
 from app.repositories.research_repository import ResearchRepository
+from app.repositories.research_visits_repository import ResearchVisitsRepository
 from app.repositories.users_repository import UsersRepository
 from app.services.blob_storage_service import blob_storage_service
 from app.services.qdrant_service import qdrant_service
@@ -35,6 +36,57 @@ class ResearchService:
     @staticmethod
     def get_user_research(db: Session, user_id: int) -> list[Research]:
         return ResearchRepository.get_by_user_id(db, user_id)
+
+    @staticmethod
+    def register_research_visit(db: Session, user_id: int, research_id: int) -> dict:
+        try:
+            UsersRepository.get_by_id(db, user_id)
+            ResearchRepository.get_by_id(db, research_id)
+
+            visit = ResearchVisitsRepository.create_or_refresh(
+                db,
+                user_id=user_id,
+                research_id=research_id,
+            )
+            removed = ResearchVisitsRepository.delete_older_than_limit(db, user_id=user_id, keep_limit=5)
+            db.commit()
+
+            return {
+                "success": True,
+                "user_id": user_id,
+                "research_id": research_id,
+                "visited_at": visit.visited_at,
+                "removed_old_visits": removed,
+            }
+        except ValueError:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            raise
+
+    @staticmethod
+    def get_recent_research_visits(db: Session, user_id: int, limit: int = 5) -> list[dict]:
+        UsersRepository.get_by_id(db, user_id)
+        normalized_limit = max(1, min(limit, 5))
+        visits = ResearchVisitsRepository.list_recent_by_user(db, user_id=user_id, limit=normalized_limit)
+
+        response: list[dict] = []
+        for visit in visits:
+            if not visit.research:
+                continue
+
+            response.append(
+                {
+                    "research_id": visit.research_id,
+                    "title": visit.research.title,
+                    "user_id": visit.user_id,
+                    "research_link": visit.research.research_link,
+                    "visited_at": visit.visited_at,
+                }
+            )
+
+        return response
 
     @staticmethod
     def _sanitize_title(title: str) -> str:
@@ -223,6 +275,10 @@ class ResearchService:
             created_at=created_at,
         )
 
+        # Hard guarantee: do not commit DB creation unless embeddings are queryable in Qdrant.
+        if not qdrant_service.has_research_embeddings(research_id):
+            raise ValueError(f"Qdrant sync verification failed for research={research_id}")
+
     @staticmethod
     def get_related_research(db: Session, research_id: int, limit: int = 5) -> list[dict]:
         source_research = ResearchRepository.get_by_id(db, research_id)
@@ -285,6 +341,80 @@ class ResearchService:
 
         scored.sort(key=lambda item: item["similarity_score"], reverse=True)
         return scored[:limit]
+
+    @staticmethod
+    def get_related_research_from_recent_visits(db: Session, user_id: int, limit: int = 5) -> list[dict]:
+        UsersRepository.get_by_id(db, user_id)
+        recent_visits = ResearchVisitsRepository.list_recent_by_user(db, user_id=user_id, limit=5)
+        if not recent_visits:
+            return []
+
+        visited_research_ids = set()
+        combined_embeddings: list[list[float]] = []
+
+        for visit in recent_visits:
+            research = visit.research
+            if not research:
+                continue
+
+            visited_research_ids.add(research.id)
+
+        if not visited_research_ids:
+            return []
+
+        try:
+            scored: list[dict] = []
+            seen_ids = set()
+
+            # Qdrant returns chunk-level points. Fetch in widening windows so we can
+            # deduplicate by research_id and still return enough unique recommendations.
+            candidate_limits = [max(20, limit * 5), max(100, limit * 25), max(300, limit * 60)]
+
+            for qdrant_limit in candidate_limits:
+                if len(scored) >= limit:
+                    break
+
+                search_results = qdrant_service.search_by_research_ids(
+                    research_ids=list(visited_research_ids),
+                    limit=qdrant_limit,
+                    exclude_research_ids=visited_research_ids,
+                )
+
+                for point in search_results:
+                    if len(scored) >= limit:
+                        break
+
+                    payload = point.payload
+                    research_id = payload.get("research_id")
+
+                    # Skip duplicates (same research_id, different chunks)
+                    if research_id in seen_ids:
+                        continue
+                    seen_ids.add(research_id)
+
+                    title = payload.get("title", "Unknown")
+                    user_id_from_payload = payload.get("user_id")
+                    research_link = payload.get("research_link")
+
+                    scored.append(
+                        {
+                            "id": research_id,
+                            "title": str(title),
+                            "user_id": user_id_from_payload,
+                            "research_link": research_link,
+                            "vector_blob_name": payload.get("vector_link", ""),
+                            "similarity_score": round(point.score, 6),
+                        }
+                    )
+
+            return scored
+        except Exception as e:
+            logger.warning(
+                "Error searching Qdrant for visit-based recommendations (user_id=%s): %s",
+                user_id,
+                e,
+            )
+            return []
 
     @staticmethod
     def create_research_with_pdf_sync(
