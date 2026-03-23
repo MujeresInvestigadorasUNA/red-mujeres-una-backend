@@ -33,6 +33,19 @@ class QdrantService:
             logger.warning("Failed to initialize Qdrant client: %s", exc)
             self.client = None
 
+    def _ensure_indexes(self, client: QdrantClient) -> None:
+        """Ensure that payload indexes exist for filtering."""
+        try:
+            # Create index for research_id (used in scroll/filter queries)
+            client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="research_id",
+                field_schema=models.PayloadSchemaType.INTEGER,
+            )
+            logger.info("Created or confirmed payload index for 'research_id'")
+        except Exception as e:
+            logger.warning("Could not create payload index for 'research_id': %s", e)
+
     @property
     def is_enabled(self) -> bool:
         return bool(self.endpoint and self.api_key)
@@ -56,6 +69,7 @@ class QdrantService:
                 ),
             )
             logger.info("Created Qdrant collection: %s", self.collection_name)
+            self._ensure_indexes(client)
             return
 
         collection_info = client.get_collection(self.collection_name)
@@ -65,6 +79,8 @@ class QdrantService:
                 f"Qdrant collection '{self.collection_name}' expects vectors of size {collection_size}, "
                 f"but received {vector_size}"
             )
+        
+        self._ensure_indexes(client)
 
     def upsert_research_embeddings(
         self,
@@ -79,8 +95,7 @@ class QdrantService:
         created_at: str,
     ) -> None:
         if not self.is_enabled:
-            logger.info("Skipping Qdrant sync because it is not configured")
-            return
+            raise ValueError("Qdrant configuration is missing; cannot sync research embeddings")
 
         if not embeddings:
             logger.warning("Skipping Qdrant sync for research=%s because no embeddings were generated", research_id)
@@ -131,6 +146,25 @@ class QdrantService:
             research_id,
         )
 
+    def has_research_embeddings(self, research_id: int) -> bool:
+        """Check whether at least one embedding chunk exists for a research_id."""
+        client = self._require_client()
+        points, _ = client.scroll(
+            collection_name=self.collection_name,
+            limit=1,
+            with_payload=False,
+            with_vectors=False,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="research_id",
+                        match=models.MatchValue(value=research_id),
+                    )
+                ]
+            ),
+        )
+        return bool(points)
+
     def delete_research_embeddings(self, research_id: int) -> None:
         if not self.is_enabled:
             return
@@ -151,6 +185,84 @@ class QdrantService:
             ),
         )
         logger.info("Deleted Qdrant embeddings for research=%s", research_id)
+
+    def search_by_research_ids(
+        self,
+        research_ids: List[int],
+        limit: int = 5,
+        exclude_research_ids: set | None = None,
+    ) -> list[models.ScoredPoint]:
+        """
+        Search for similar research documents based on a list of research IDs.
+        
+        1. Fetches all embeddings for the given research_ids
+        2. Computes centroid of those embeddings
+        3. Uses centroid to search for similar documents
+        4. Excludes the original research_ids from results
+        
+        Returns list of ScoredPoint sorted by similarity (highest first).
+        """
+        if not self.is_enabled:
+            return []
+
+        if not research_ids:
+            return []
+
+        if exclude_research_ids is None:
+            exclude_research_ids = set(research_ids)
+
+        client = self._require_client()
+
+        points = client.scroll(
+            collection_name=self.collection_name,
+            limit=10000,
+            with_payload=True,
+            with_vectors=True,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="research_id",
+                        match=models.MatchAny(any=research_ids),
+                    )
+                ]
+            ),
+        )[0]
+
+        if not points:
+            logger.warning("No embeddings found for research_ids: %s", research_ids)
+            return []
+
+        embeddings = [point.vector for point in points if point.vector]
+        if not embeddings:
+            logger.warning("No vectors found for research_ids: %s", research_ids)
+            return []
+
+        dimensionality = len(embeddings[0])
+        centroid = [sum(dim) / len(embeddings) for dim in zip(*embeddings)]
+
+        exclude_research_ids_list = list(exclude_research_ids) if exclude_research_ids else []
+        search_filter = None
+        if exclude_research_ids_list:
+            search_filter = models.Filter(
+                must_not=[
+                    models.FieldCondition(
+                        key="research_id",
+                        match=models.MatchAny(any=exclude_research_ids_list),
+                    )
+                ]
+            )
+
+        try:
+            search_results = client.query_points(
+                collection_name=self.collection_name,
+                query=centroid,
+                query_filter=search_filter,
+                limit=limit,
+            )
+            return search_results.points
+        except Exception as e:
+            logger.warning("Error searching Qdrant by research_ids: %s", e)
+            return []
 
 
 qdrant_service = QdrantService()

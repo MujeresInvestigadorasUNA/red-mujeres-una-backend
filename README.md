@@ -69,6 +69,9 @@ uvicorn app.main:app --reload
 - `GET /research/` → Listar investigaciones
 - `GET /research/{research_id}` → Detalle de investigación
 - `GET /research/{research_id}/related?limit=5` → **Documentos relacionados por similitud vectorial**
+- `POST /research/user/{user_id}/visits/{research_id}` → Registrar visita de investigación (historial acotado a 5 por usuario)
+- `GET /research/user/{user_id}/visits?limit=5` → Obtener últimas visitas del usuario
+- `GET /research/user/{user_id}/related-from-visits?limit=5` → Recomendaciones usando las últimas 5 visitas del usuario
 - `DELETE /research/{research_id}` → Eliminar investigación
 
 **Búsqueda vectorial:**
