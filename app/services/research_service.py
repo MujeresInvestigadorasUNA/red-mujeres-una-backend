@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.research import Research
+from app.repositories.research_like_events_repository import ResearchLikeEventsRepository
+from app.repositories.research_likes_repository import ResearchLikesRepository
 from app.repositories.research_repository import ResearchRepository
 from app.repositories.research_visits_repository import ResearchVisitsRepository
 from app.repositories.users_repository import UsersRepository
@@ -83,6 +85,109 @@ class ResearchService:
                     "user_id": visit.user_id,
                     "research_link": visit.research.research_link,
                     "visited_at": visit.visited_at,
+                }
+            )
+
+        return response
+
+    @staticmethod
+    def like_research(db: Session, user_id: int, research_id: int) -> dict:
+        try:
+            UsersRepository.get_by_id(db, user_id)
+            ResearchRepository.get_by_id(db, research_id)
+
+            like, _ = ResearchLikesRepository.like(db, user_id=user_id, research_id=research_id)
+            ResearchLikeEventsRepository.create(db, user_id=user_id, research_id=research_id, action="like")
+            db.commit()
+
+            return {
+                "success": True,
+                "user_id": user_id,
+                "research_id": research_id,
+                "is_liked": True,
+                "liked_at": like.liked_at,
+            }
+        except ValueError:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            raise
+
+    @staticmethod
+    def unlike_research(db: Session, user_id: int, research_id: int) -> dict:
+        try:
+            UsersRepository.get_by_id(db, user_id)
+            ResearchRepository.get_by_id(db, research_id)
+
+            like, changed = ResearchLikesRepository.unlike(db, user_id=user_id, research_id=research_id)
+            if changed:
+                ResearchLikeEventsRepository.create(db, user_id=user_id, research_id=research_id, action="unlike")
+
+            db.commit()
+
+            return {
+                "success": True,
+                "user_id": user_id,
+                "research_id": research_id,
+                "is_liked": False,
+                "liked_at": like.liked_at if like else None,
+            }
+        except ValueError:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            raise
+
+    @staticmethod
+    def get_recent_research_likes(db: Session, user_id: int, limit: int = 5) -> list[dict]:
+        UsersRepository.get_by_id(db, user_id)
+        normalized_limit = max(1, min(limit, 5))
+        likes = ResearchLikesRepository.list_recent_active_by_user(db, user_id=user_id, limit=normalized_limit)
+
+        response: list[dict] = []
+        for like in likes:
+            if not like.research:
+                continue
+
+            response.append(
+                {
+                    "research_id": like.research_id,
+                    "title": like.research.title,
+                    "user_id": like.user_id,
+                    "research_link": like.research.research_link,
+                    "liked_at": like.liked_at,
+                }
+            )
+
+        return response
+
+    @staticmethod
+    def get_research_like_history(db: Session, user_id: int, skip: int = 0, limit: int = 50) -> list[dict]:
+        UsersRepository.get_by_id(db, user_id)
+        normalized_skip = max(0, skip)
+        normalized_limit = max(1, min(limit, 200))
+        events = ResearchLikeEventsRepository.list_by_user(
+            db,
+            user_id=user_id,
+            skip=normalized_skip,
+            limit=normalized_limit,
+        )
+
+        response: list[dict] = []
+        for event in events:
+            if not event.research:
+                continue
+
+            response.append(
+                {
+                    "research_id": event.research_id,
+                    "title": event.research.title,
+                    "user_id": event.user_id,
+                    "research_link": event.research.research_link,
+                    "action": event.action,
+                    "created_at": event.created_at,
                 }
             )
 
@@ -350,7 +455,6 @@ class ResearchService:
             return []
 
         visited_research_ids = set()
-        combined_embeddings: list[list[float]] = []
 
         for visit in recent_visits:
             research = visit.research
@@ -360,6 +464,65 @@ class ResearchService:
             visited_research_ids.add(research.id)
 
         if not visited_research_ids:
+            return []
+
+        return ResearchService._get_qdrant_recommendations_from_source_ids(
+            source_research_ids=visited_research_ids,
+            exclude_research_ids=visited_research_ids,
+            limit=limit,
+            log_context=f"visits user_id={user_id}",
+            source_weights=None,
+        )
+
+    @staticmethod
+    def get_related_research_from_recent_interactions(db: Session, user_id: int, limit: int = 5) -> list[dict]:
+        UsersRepository.get_by_id(db, user_id)
+
+        recent_visits = ResearchVisitsRepository.list_recent_by_user(db, user_id=user_id, limit=5)
+        recent_likes = ResearchLikesRepository.list_recent_active_by_user(db, user_id=user_id, limit=5)
+
+        visited_research_ids = set()
+        for visit in recent_visits:
+            if visit.research:
+                visited_research_ids.add(visit.research.id)
+
+        liked_research_ids = set()
+        for like in recent_likes:
+            if like.research:
+                liked_research_ids.add(like.research.id)
+
+        source_research_ids = visited_research_ids | liked_research_ids
+
+        if not source_research_ids:
+            return []
+
+        # Weight interaction sources:
+        # - visited only: 1.0
+        # - liked only: 1.0
+        # - visited + liked: 2.0 (extra relevance)
+        source_weights: dict[int, float] = {}
+        for research_id in visited_research_ids:
+            source_weights[research_id] = source_weights.get(research_id, 0.0) + 1.0
+        for research_id in liked_research_ids:
+            source_weights[research_id] = source_weights.get(research_id, 0.0) + 1.0
+
+        return ResearchService._get_qdrant_recommendations_from_source_ids(
+            source_research_ids=source_research_ids,
+            exclude_research_ids=source_research_ids,
+            limit=limit,
+            log_context=f"interactions user_id={user_id}",
+            source_weights=source_weights,
+        )
+
+    @staticmethod
+    def _get_qdrant_recommendations_from_source_ids(
+        source_research_ids: set[int],
+        exclude_research_ids: set[int],
+        limit: int,
+        log_context: str,
+        source_weights: dict[int, float] | None = None,
+    ) -> list[dict]:
+        if not source_research_ids:
             return []
 
         try:
@@ -375,9 +538,10 @@ class ResearchService:
                     break
 
                 search_results = qdrant_service.search_by_research_ids(
-                    research_ids=list(visited_research_ids),
+                    research_ids=list(source_research_ids),
                     limit=qdrant_limit,
-                    exclude_research_ids=visited_research_ids,
+                    exclude_research_ids=exclude_research_ids,
+                    research_weights=source_weights,
                 )
 
                 for point in search_results:
@@ -410,8 +574,8 @@ class ResearchService:
             return scored
         except Exception as e:
             logger.warning(
-                "Error searching Qdrant for visit-based recommendations (user_id=%s): %s",
-                user_id,
+                "Error searching Qdrant for recommendations (%s): %s",
+                log_context,
                 e,
             )
             return []

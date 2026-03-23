@@ -56,3 +56,28 @@ class ResearchRecentVisitOut(BaseModel):
     user_id: int
     research_link: str
     visited_at: datetime
+
+
+class ResearchLikeActionOut(BaseModel):
+    success: bool
+    user_id: int
+    research_id: int
+    is_liked: bool
+    liked_at: Optional[datetime] = None
+
+
+class ResearchRecentLikeOut(BaseModel):
+    research_id: int
+    title: str
+    user_id: int
+    research_link: str
+    liked_at: datetime
+
+
+class ResearchLikeEventOut(BaseModel):
+    research_id: int
+    title: str
+    user_id: int
+    research_link: str
+    action: str
+    created_at: datetime

@@ -191,6 +191,7 @@ class QdrantService:
         research_ids: List[int],
         limit: int = 5,
         exclude_research_ids: set | None = None,
+        research_weights: dict[int, float] | None = None,
     ) -> list[models.ScoredPoint]:
         """
         Search for similar research documents based on a list of research IDs.
@@ -201,6 +202,7 @@ class QdrantService:
         4. Excludes the original research_ids from results
         
         Returns list of ScoredPoint sorted by similarity (highest first).
+        Optional research_weights allows weighted centroid calculation per source research_id.
         """
         if not self.is_enabled:
             return []
@@ -238,7 +240,33 @@ class QdrantService:
             return []
 
         dimensionality = len(embeddings[0])
-        centroid = [sum(dim) / len(embeddings) for dim in zip(*embeddings)]
+        weighted_totals = [0.0] * dimensionality
+        total_weight = 0.0
+
+        for point in points:
+            vector = point.vector
+            if not vector or len(vector) != dimensionality:
+                continue
+
+            weight = 1.0
+            if research_weights:
+                payload = point.payload or {}
+                research_id = payload.get("research_id")
+                if research_id is not None:
+                    weight = float(research_weights.get(research_id, 1.0))
+
+            if weight <= 0:
+                continue
+
+            total_weight += weight
+            for idx in range(dimensionality):
+                weighted_totals[idx] += float(vector[idx]) * weight
+
+        if total_weight == 0:
+            logger.warning("Total weight is zero for research_ids: %s", research_ids)
+            return []
+
+        centroid = [value / total_weight for value in weighted_totals]
 
         exclude_research_ids_list = list(exclude_research_ids) if exclude_research_ids else []
         search_filter = None

@@ -28,3 +28,5 @@ class Users(Base):
     # Relationship to Research
     researches = relationship("Research", back_populates="user")
     research_visits = relationship("ResearchVisit")
+    research_likes = relationship("ResearchLike", back_populates="user")
+    research_like_events = relationship("ResearchLikeEvent", back_populates="user")

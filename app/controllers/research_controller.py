@@ -61,6 +61,51 @@ class ResearchController:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
+    def like_research(db: Session, user_id: int, research_id: int):
+        try:
+            return ResearchService.like_research(db, user_id=user_id, research_id=research_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def unlike_research(db: Session, user_id: int, research_id: int):
+        try:
+            return ResearchService.unlike_research(db, user_id=user_id, research_id=research_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_recent_research_likes(db: Session, user_id: int, limit: int = 5):
+        try:
+            return ResearchService.get_recent_research_likes(db, user_id=user_id, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_research_like_history(db: Session, user_id: int, skip: int = 0, limit: int = 50):
+        try:
+            return ResearchService.get_research_like_history(db, user_id=user_id, skip=skip, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_related_research_from_recent_interactions(db: Session, user_id: int, limit: int = 4):
+        try:
+            return ResearchService.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
     def create_research_sync(
         db: Session,
         user_id: int,
