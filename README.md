@@ -72,6 +72,11 @@ uvicorn app.main:app --reload
 - `POST /research/user/{user_id}/visits/{research_id}` → Registrar visita de investigación (historial acotado a 5 por usuario)
 - `GET /research/user/{user_id}/visits?limit=5` → Obtener últimas visitas del usuario
 - `GET /research/user/{user_id}/related-from-visits?limit=5` → Recomendaciones usando las últimas 5 visitas del usuario
+- `POST /research/user/{user_id}/likes/{research_id}` → Dar like a una investigación (estado actual de likes)
+- `DELETE /research/user/{user_id}/likes/{research_id}` → Quitar like de una investigación
+- `GET /research/user/{user_id}/likes?limit=5` → Obtener los últimos likes activos del usuario
+- `GET /research/user/{user_id}/likes/history?skip=0&limit=50` → Historial completo de acciones like/unlike del usuario (paginado)
+- `GET /research/user/{user_id}/related-from-interactions?limit=5` → Recomendaciones usando combinación de últimas 5 visitas + últimos 5 likes
 - `DELETE /research/{research_id}` → Eliminar investigación
 
 **Búsqueda vectorial:**
