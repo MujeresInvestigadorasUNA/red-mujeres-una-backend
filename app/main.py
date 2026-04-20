@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from app.core.config import settings
-from app.core.db import Base, engine
+from app.core.db import Base, engine, SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.models.user_types import UserType
 
 from app.routes.users_routes import router as users_router
 from app.routes.user_types_routes import router as user_types_router
@@ -12,6 +14,21 @@ from app.routes.research_routes import router as research_router
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
+def seed_default_user_types():
+    db = SessionLocal()
+    try:
+        if db.query(UserType).count() == 0:
+            db.add_all(
+                [
+                    UserType(description="Usuario"),
+                    UserType(description="Investigadora"),
+                ]
+            )
+            db.commit()
+    finally:
+        db.close()
 
 is_dev_environment = (settings.ENV or "").strip().lower() == "dev"
 
@@ -45,6 +62,7 @@ def _on_startup():
     logger = logging.getLogger("uvicorn.error")
     try:
         init_db()
+        seed_default_user_types()
         app.state.db_connected = True
         app.state.db_error = None
         logger.info("Database initialized successfully on startup.")

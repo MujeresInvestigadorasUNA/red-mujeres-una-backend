@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from app.repositories.users_repository import UsersRepository
+from app.repositories.user_types_repository import UserTypeRepository
 from app.schemas.users import UserCreate, UserUpdate
 from app.models.users import Users
 from datetime import timedelta
@@ -51,6 +52,11 @@ class UsersService:
             existing = UsersRepository.get_by_email(db, email)
             if existing:
                 raise ValueError("Email already registered")
+
+            # 1.1 Validar que el tipo de usuario exista antes de intentar insertar
+            user_type = UserTypeRepository.get_by_id(db, user_type_id)
+            if not user_type:
+                raise ValueError(f"User type {user_type_id} does not exist")
 
             # 2. Validar imagen (sin subir aún)
             photo_blob_name = None
@@ -224,6 +230,10 @@ class UsersService:
         existing = UsersRepository.get_by_email(db, payload.email)
         if existing:
             raise ValueError("Email already registered")
+
+        user_type = UserTypeRepository.get_by_id(db, payload.user_type_id)
+        if not user_type:
+            raise ValueError(f"User type {payload.user_type_id} does not exist")
     
         # Hash password before creating user
         payload.password = hash_password(payload.password)
