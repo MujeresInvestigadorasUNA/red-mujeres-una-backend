@@ -17,6 +17,28 @@ def list_users(
 ):
     return UserController.list_users(db, skip=skip, limit=limit)
 
+@router.get("/researchers", response_model=list[UsersDetailsOut])
+def get_researchers(
+    is_public: bool = Query(False, description="If true, return only researchers with is_public=True. If false, return all researchers."),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all researchers (user_type_id = 2).
+    
+    Query Parameters:
+    - is_public (bool): Filter to only public researchers. Default: False (returns all researchers)
+    - skip (int): Number of records to skip (for pagination)
+    - limit (int): Maximum number of records to return (1-200, default: 50)
+    
+    Examples:
+    - GET /users/researchers → All researchers
+    - GET /users/researchers?is_public=true → Only public researchers
+    - GET /users/researchers?is_public=true&skip=10&limit=20 → Public researchers with pagination
+    """
+    return UserController.get_researchers(db, is_public, skip, limit)
+
 @router.get("/{user_id}", response_model=UsersDetailsOut)
 def get_user(user_id: int, db: Session = Depends(get_db)):
     return UserController.get_user(db, user_id)

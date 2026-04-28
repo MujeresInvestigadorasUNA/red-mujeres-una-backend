@@ -31,6 +31,11 @@ class UsersService:
         return UsersRepository.get_by_email(db, email)
 
     @staticmethod
+    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int = 50) -> list[Users]:
+        """Get all researchers or only those that are public."""
+        return UsersRepository.get_researchers(db, is_public_only, skip, limit)
+
+    @staticmethod
     async def register_user_with_image(
         db: Session,
         email: str,

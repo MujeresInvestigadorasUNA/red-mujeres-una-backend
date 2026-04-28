@@ -96,6 +96,11 @@ class UserController:
         if not UsersService.delete_user(db, user_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         return {"status": "ok"}
+
+    @staticmethod
+    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int = 50):
+        """Get researchers (user_type_id = 2). Optionally filter by is_public = True."""
+        return UsersService.get_researchers(db, is_public_only, skip, limit)
     
     @staticmethod
     def login(db: Session, user_login):

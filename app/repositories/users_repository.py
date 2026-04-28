@@ -65,3 +65,13 @@ class UsersRepository:
         db.delete(user)
         db.commit()
         return True
+
+    @staticmethod
+    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int = 100):
+        """Get researchers (user_type_id = 2). Optionally filter by is_public = True."""
+        query = db.query(Users).filter(Users.user_type_id == 2)
+        
+        if is_public_only:
+            query = query.filter(Users.is_public == True)
+        
+        return query.order_by(Users.id).offset(skip).limit(limit).all()
