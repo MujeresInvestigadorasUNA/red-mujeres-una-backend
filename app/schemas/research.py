@@ -26,12 +26,14 @@ class ResearchCreateResponse(BaseModel):
     success: bool
     id: int
     research_link: str
-    vector_link: str
+    vector_link: Optional[str] = None
     description: Optional[str] = None
+    status: str = "processing"  # processing, ready, failed
 
 
 class ResearchDetailsOut(ResearchBase):
     id: int
+    status: str = "ready"
 
     class Config:
         from_attributes = True

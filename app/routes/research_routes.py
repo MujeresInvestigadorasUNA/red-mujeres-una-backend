@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.controllers.research_controller import ResearchController
@@ -124,12 +124,13 @@ async def create_research(
     title: str = Form(...),
     description: str = Form(None),
     document: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ):
-    # Lee el archivo en async context
+    # Read the file in async context
     pdf_bytes = await document.read()
     
-    # Llama al controller de forma síncrona
+    # Call the controller synchronously, passing background tasks
     return ResearchController.create_research_sync(
         db=db,
         user_id=user_id,
@@ -138,6 +139,7 @@ async def create_research(
         document_bytes=pdf_bytes,
         document_filename=document.filename,
         document_content_type=document.content_type,
+        background_tasks=background_tasks,
     )
 
 

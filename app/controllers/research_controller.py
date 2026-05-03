@@ -1,4 +1,4 @@
-from fastapi import HTTPException, status, UploadFile
+from fastapi import HTTPException, status, UploadFile, BackgroundTasks
 import logging
 from openai import RateLimitError
 from sqlalchemy.orm import Session
@@ -115,9 +115,11 @@ class ResearchController:
         document_bytes: bytes,
         document_filename: str,
         document_content_type: str,
+        background_tasks: BackgroundTasks,
     ):
         try:
-            return ResearchService.create_research_with_pdf_sync(
+            # Create research record immediately and return
+            result = ResearchService.create_research_with_pdf_immediate(
                 db=db,
                 user_id=user_id,
                 title=title,
@@ -126,6 +128,19 @@ class ResearchController:
                 document_filename=document_filename,
                 document_content_type=document_content_type,
             )
+
+            # Queue background task to process embeddings
+            research_id = result["id"]
+            background_tasks.add_task(
+                ResearchService.process_research_embeddings_background,
+                research_id=research_id,
+                user_id=user_id,
+                title=title,
+                research_link=result["research_link"],
+                document_bytes=document_bytes,
+            )
+
+            return result
         except RateLimitError as e:
             retry_after = 60
             raise HTTPException(

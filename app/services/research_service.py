@@ -15,6 +15,7 @@ from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.db import SessionLocal
 from app.models.research import Research
 from app.repositories.research_like_events_repository import ResearchLikeEventsRepository
 from app.repositories.research_likes_repository import ResearchLikesRepository
@@ -314,7 +315,7 @@ class ResearchService:
         if not chunks:
             return []
 
-        batch_size = 5
+        batch_size = max(1, settings.AZURE_OPENAI_EMBEDDING_BATCH_SIZE)
         max_retries = 3
         embeddings: List[List[float]] = []
 
@@ -632,6 +633,182 @@ class ResearchService:
                 e,
             )
             return []
+
+    @staticmethod
+    def create_research_with_pdf_immediate(
+        db: Session,
+        user_id: int,
+        title: str,
+        description: str | None,
+        document_bytes: bytes,
+        document_filename: str,
+        document_content_type: str,
+    ) -> dict:
+        """Create research record immediately, queue embeddings for background processing."""
+        try:
+            # Validate user
+            UsersRepository.get_by_id(db, user_id)
+
+            # Validate PDF
+            if document_content_type != "application/pdf":
+                raise ValueError("Invalid document type. Only PDF is allowed")
+
+            max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+            if len(document_bytes) > max_size:
+                raise ValueError(f"PDF too large. Max {settings.MAX_UPLOAD_SIZE_MB}MB")
+
+            # Extract text immediately to validate
+            extracted_text = ResearchService._extract_pdf_text(document_bytes)
+            if not extracted_text.strip():
+                raise ValueError("No text could be extracted from the PDF")
+
+            # Prepare blob names
+            safe_title = ResearchService._sanitize_title(title)
+            research_file_name = f"{safe_title}_research.pdf"
+            subfolder = f"research/{user_id}/"
+
+            # Upload research PDF immediately
+            pdf_upload = blob_storage_service.upload_file(
+                file_content=io.BytesIO(document_bytes),
+                file_name=document_filename,
+                container_type="documents",
+                metadata={"type": "research", "user_id": str(user_id), "title": title},
+                subfolder=subfolder,
+                fixed_blob_name=research_file_name,
+            )
+
+            # Create research record with status=processing, vector_link=null
+            research = ResearchRepository.create(
+                db,
+                user_id=user_id,
+                title=title,
+                description=description,
+                research_link=pdf_upload["url"],
+                vector_link="",  # will be updated by background task
+            )
+            # Set status to processing
+            research.status = "processing"
+            db.commit()
+            db.refresh(research)
+
+            return {
+                "success": True,
+                "id": research.id,
+                "research_link": research.research_link,
+                "vector_link": None,
+                "description": research.description,
+                "status": research.status,
+            }
+        except ValueError:
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise
+
+    @staticmethod
+    def process_research_embeddings_background(
+        research_id: int,
+        user_id: int,
+        title: str,
+        research_link: str,
+        document_bytes: bytes,
+    ) -> None:
+        """Process embeddings in background and update research record."""
+        db = SessionLocal()
+        vector_blob_name = None
+        try:
+            research = ResearchRepository.get_by_id(db, research_id)
+            if not research:
+                logger.error(f"Research {research_id} not found for background processing")
+                return
+
+            # Extract text
+            extracted_text = ResearchService._extract_pdf_text(document_bytes)
+            if not extracted_text.strip():
+                research.status = "failed"
+                db.commit()
+                logger.error(f"No text extracted for research {research_id}")
+                return
+
+            # Generate embeddings
+            chunks = ResearchService._chunk_text(extracted_text)
+            embeddings = ResearchService._generate_embeddings(chunks)
+
+            # Prepare vector blob
+            safe_title = ResearchService._sanitize_title(title)
+            vector_file_name = f"{safe_title}_vector.json"
+            subfolder = f"research/{user_id}/"
+            
+            vector_created_at = datetime.utcnow().isoformat()
+            vector_payload = {
+                "user_id": user_id,
+                "title": title,
+                "created_at": vector_created_at,
+                "text_length": len(extracted_text),
+                "embedding_model": settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+                "chunks": chunks,
+                "embeddings": embeddings,
+            }
+            vector_bytes = json.dumps(vector_payload).encode("utf-8")
+
+            # Upload vector blob
+            vector_upload = blob_storage_service.upload_file(
+                file_content=io.BytesIO(vector_bytes),
+                file_name=vector_file_name,
+                container_type="vectorized",
+                metadata={"type": "research_vector", "user_id": str(user_id), "title": title},
+                subfolder=subfolder,
+                fixed_blob_name=vector_file_name,
+            )
+            vector_blob_name = vector_upload["blob_name"]
+
+            # Sync to Qdrant
+            ResearchService._sync_research_embeddings_to_qdrant(
+                research_id=research_id,
+                user_id=user_id,
+                title=title,
+                research_link=research_link,
+                vector_link=vector_upload["url"],
+                chunks=chunks,
+                embeddings=embeddings,
+                created_at=vector_created_at,
+            )
+
+            # Update research record
+            research.vector_link = vector_upload["url"]
+            research.status = "ready"
+            db.commit()
+            logger.info(f"Successfully processed embeddings for research {research_id}")
+
+        except RateLimitError as e:
+            db.rollback()
+            research.status = "failed"
+            db.commit()
+            logger.error(f"Rate limit error processing research {research_id}: {e}")
+            if vector_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=vector_blob_name,
+                        container_type="vectorized",
+                    )
+                except Exception:
+                    pass
+        except Exception as e:
+            db.rollback()
+            research.status = "failed"
+            db.commit()
+            logger.error(f"Error processing embeddings for research {research_id}: {e}")
+            if vector_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=vector_blob_name,
+                        container_type="vectorized",
+                    )
+                except Exception:
+                    pass
+        finally:
+            db.close()
 
     @staticmethod
     def create_research_with_pdf_sync(

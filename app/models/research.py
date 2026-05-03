@@ -8,10 +8,11 @@ class Research(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     research_link = Column(String(1024), nullable=False)
-    vector_link = Column(String(1024), nullable=False)
+    vector_link = Column(String(1024), nullable=True)  # nullable during processing
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(String(1000), nullable=True)
+    status = Column(String(20), default="processing", nullable=False)  # processing, ready, failed
 
     user = relationship("Users", back_populates="researches")
     visits = relationship("ResearchVisit", back_populates="research")
