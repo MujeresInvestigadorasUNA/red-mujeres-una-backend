@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status, UploadFile
 import logging
+from openai import RateLimitError
 from sqlalchemy.orm import Session
 from app.services.research_service import ResearchService
 
@@ -125,6 +126,13 @@ class ResearchController:
                 document_filename=document_filename,
                 document_content_type=document_content_type,
             )
+        except RateLimitError as e:
+            retry_after = 60
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(e),
+                headers={"Retry-After": str(retry_after)},
+            )
         except ValueError as e:
             logger.warning(f"Validation error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
@@ -160,6 +168,13 @@ class ResearchController:
                 title=title,
                 description=description,
                 document=document,
+            )
+        except RateLimitError as e:
+            retry_after = 60
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(e),
+                headers={"Retry-After": str(retry_after)},
             )
         except ValueError as e:
             logger.warning(f"Validation error: {str(e)}")

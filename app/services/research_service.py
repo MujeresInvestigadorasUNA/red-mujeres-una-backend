@@ -3,13 +3,14 @@ import json
 import logging
 import math
 import re
+import time
 import traceback
 from datetime import datetime
 from typing import List
 from urllib.parse import unquote, urlparse
 
 from fastapi import UploadFile
-from openai import AzureOpenAI
+from openai import AzureOpenAI, RateLimitError
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
@@ -284,11 +285,37 @@ class ResearchService:
             raise ValueError("Azure OpenAI embedding deployment name is missing")
 
         client = ResearchService._get_azure_openai_client()
-        response = client.embeddings.create(
-            input=chunks,
-            model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
-        )
-        return [item.embedding for item in response.data]
+        if not chunks:
+            return []
+
+        batch_size = 5
+        max_retries = 3
+        embeddings: List[List[float]] = []
+
+        for batch_start in range(0, len(chunks), batch_size):
+            batch = chunks[batch_start:batch_start + batch_size]
+            for attempt in range(max_retries):
+                try:
+                    response = client.embeddings.create(
+                        input=batch,
+                        model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+                    )
+                    embeddings.extend(item.embedding for item in response.data)
+                    break
+                except RateLimitError:
+                    if attempt == max_retries - 1:
+                        raise
+
+                    delay_seconds = min(60, 5 * (2 ** attempt))
+                    logger.warning(
+                        "Azure OpenAI rate limit hit while embedding research chunks %s-%s; retrying in %ss",
+                        batch_start + 1,
+                        batch_start + len(batch),
+                        delay_seconds,
+                    )
+                    time.sleep(delay_seconds)
+
+        return embeddings
 
     @staticmethod
     def _extract_blob_name_from_url(blob_url: str) -> str:
@@ -687,6 +714,25 @@ class ResearchService:
         except ValueError:
             db.rollback()
             raise
+        except RateLimitError:
+            db.rollback()
+            if research_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=research_blob_name,
+                        container_type="documents",
+                    )
+                except Exception:
+                    pass
+            if vector_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=vector_blob_name,
+                        container_type="vectorized",
+                    )
+                except Exception:
+                    pass
+            raise
         except Exception as e:
             db.rollback()
             error_msg = str(e) if str(e) else repr(e)
@@ -815,6 +861,25 @@ class ResearchService:
             }
         except ValueError:
             db.rollback()
+            raise
+        except RateLimitError:
+            db.rollback()
+            if research_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=research_blob_name,
+                        container_type="documents",
+                    )
+                except Exception:
+                    pass
+            if vector_blob_name:
+                try:
+                    blob_storage_service.delete_file(
+                        blob_name=vector_blob_name,
+                        container_type="vectorized",
+                    )
+                except Exception:
+                    pass
             raise
         except Exception as e:
             db.rollback()
