@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.core.db import Base, engine, SessionLocal
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.models.user_types import UserType
 
@@ -29,6 +30,22 @@ def seed_default_user_types():
             db.commit()
     finally:
         db.close()
+
+
+def ensure_research_status_column():
+    """Ensure research.status column exists in database for processing tracking."""
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("research")}
+    if "status" in columns:
+        return
+
+    if engine.dialect.name == "sqlite":
+        ddl = "ALTER TABLE research ADD COLUMN status TEXT DEFAULT 'ready'"
+    else:
+        ddl = "ALTER TABLE research ADD status NVARCHAR(20) DEFAULT 'ready' NOT NULL"
+
+    with engine.begin() as conn:
+        conn.execute(text(ddl))
 
 is_dev_environment = (settings.ENV or "").strip().lower() == "dev"
 
@@ -62,6 +79,7 @@ def _on_startup():
     logger = logging.getLogger("uvicorn.error")
     try:
         init_db()
+        ensure_research_status_column()
         seed_default_user_types()
         app.state.db_connected = True
         app.state.db_error = None

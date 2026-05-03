@@ -8,7 +8,7 @@ class ResearchBase(BaseModel):
     title: str
     description: Optional[str] = None
     research_link: str
-    vector_link: str
+    vector_link: Optional[str] = None  # nullable during processing
 
 
 class ResearchCreate(BaseModel):
