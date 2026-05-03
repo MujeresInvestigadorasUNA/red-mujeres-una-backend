@@ -6,6 +6,7 @@ from datetime import datetime
 class ResearchBase(BaseModel):
     user_id: int
     title: str
+    description: Optional[str] = None
     research_link: str
     vector_link: str
 
@@ -13,10 +14,12 @@ class ResearchBase(BaseModel):
 class ResearchCreate(BaseModel):
     user_id: int
     title: str
+    description: Optional[str] = None
 
 
 class ResearchUpdate(BaseModel):
     title: Optional[str] = None
+    description: Optional[str] = None
 
 
 class ResearchCreateResponse(BaseModel):
@@ -24,6 +27,7 @@ class ResearchCreateResponse(BaseModel):
     id: int
     research_link: str
     vector_link: str
+    description: Optional[str] = None
 
 
 class ResearchDetailsOut(ResearchBase):
