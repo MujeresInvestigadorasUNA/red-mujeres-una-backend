@@ -658,6 +658,7 @@ class ResearchService:
                 db,
                 user_id=user_id,
                 title=title,
+                description=description,
                 research_link=pdf_upload["url"],
                 vector_link=vector_upload["url"],
             )
@@ -681,6 +682,7 @@ class ResearchService:
                 "id": research.id,
                 "research_link": research.research_link,
                 "vector_link": research.vector_link,
+                "description": research.description,
             }
         except ValueError:
             db.rollback()
@@ -714,6 +716,7 @@ class ResearchService:
         db: Session,
         user_id: int,
         title: str,
+        description: str | None,
         document: UploadFile,
     ) -> dict:
         research_blob_name = None
@@ -784,6 +787,7 @@ class ResearchService:
                 db,
                 user_id=user_id,
                 title=title,
+                description=description,
                 research_link=pdf_upload["url"],
                 vector_link=vector_upload["url"],
             )
@@ -807,6 +811,7 @@ class ResearchService:
                 "id": research.id,
                 "research_link": research.research_link,
                 "vector_link": research.vector_link,
+                "description": research.description,
             }
         except ValueError:
             db.rollback()

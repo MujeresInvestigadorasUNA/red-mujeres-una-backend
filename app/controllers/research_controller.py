@@ -150,6 +150,7 @@ class ResearchController:
         db: Session,
         user_id: int,
         title: str,
+        description: str | None,
         document: UploadFile,
     ):
         try:
@@ -157,6 +158,7 @@ class ResearchController:
                 db=db,
                 user_id=user_id,
                 title=title,
+                description=description,
                 document=document,
             )
         except ValueError as e:
