@@ -200,6 +200,32 @@ class ResearchService:
         return safe or "research"
 
     @staticmethod
+    def _extract_blob_info(blob_url: str | None) -> tuple[str, str] | None:
+        if not blob_url:
+            return None
+
+        parsed = urlparse(blob_url)
+        path = parsed.path.lstrip("/")
+        if not path:
+            return None
+
+        parts = path.split("/", 1)
+        if len(parts) != 2:
+            return None
+
+        container_name, blob_name = parts
+        container_map = {
+            settings.AZURE_BLOB_CONTAINER_DOCUMENTS: "documents",
+            settings.AZURE_BLOB_CONTAINER_IMAGES: "images",
+            settings.AZURE_BLOB_CONTAINER_VECTORIZED: "vectorized",
+        }
+        container_type = container_map.get(container_name)
+        if not container_type:
+            return None
+
+        return container_type, blob_name
+
+    @staticmethod
     def _extract_pdf_text(pdf_bytes: bytes) -> str:
         """Extract text from PDF with memory optimization. Limits to first 50MB of text."""
         reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -864,4 +890,16 @@ class ResearchService:
 
     @staticmethod
     def delete_research(db: Session, research_id: int) -> bool:
+        research = ResearchRepository.get_by_id(db, research_id)
+
+        if qdrant_service.is_enabled:
+            qdrant_service.delete_research_embeddings(research_id)
+
+        for link in (research.research_link, research.vector_link):
+            blob_info = ResearchService._extract_blob_info(link)
+            if not blob_info:
+                continue
+            container_type, blob_name = blob_info
+            blob_storage_service.delete_file(blob_name=blob_name, container_type=container_type)
+
         return ResearchRepository.delete(db, research_id)
