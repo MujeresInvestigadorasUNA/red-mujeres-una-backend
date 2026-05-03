@@ -11,6 +11,7 @@ class Research(Base):
     vector_link = Column(String(1024), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
+    description = Column(String(1000), nullable=True)
 
     user = relationship("Users", back_populates="researches")
     visits = relationship("ResearchVisit", back_populates="research")

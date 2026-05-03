@@ -27,16 +27,31 @@ class ResearchRepository:
         db: Session,
         user_id: int,
         title: str,
+        description: str | None,
         research_link: str,
         vector_link: str,
     ):
         research = Research(
             user_id=user_id,
             title=title,
+            description=description,
             research_link=research_link,
             vector_link=vector_link,
         )
         db.add(research)
+        db.flush()
+        return research
+
+    @staticmethod
+    def update(db: Session, research_id: int, updates: dict):
+        research = db.query(Research).filter(Research.id == research_id).first()
+        if not research:
+            raise ValueError("Research not found")
+        
+        for key, value in updates.items():
+            if hasattr(research, key) and key not in ['id', 'research_link', 'vector_link']:
+                setattr(research, key, value)
+        
         db.flush()
         return research
 

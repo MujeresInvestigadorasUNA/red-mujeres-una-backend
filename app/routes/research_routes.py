@@ -11,6 +11,7 @@ from app.schemas.research import (
     ResearchLikeActionOut,
     ResearchRecentLikeOut,
     ResearchLikeEventOut,
+    ResearchUpdate,
 )
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -121,6 +122,7 @@ def get_related_research_from_recent_interactions(
 async def create_research(
     user_id: int = Form(...),
     title: str = Form(...),
+    description: str = Form(None),
     document: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -132,10 +134,20 @@ async def create_research(
         db=db,
         user_id=user_id,
         title=title,
+        description=description,
         document_bytes=pdf_bytes,
         document_filename=document.filename,
         document_content_type=document.content_type,
     )
+
+
+@router.put("/{research_id}", response_model=dict)
+def update_research(
+    research_id: int,
+    research_update: ResearchUpdate,
+    db: Session = Depends(get_db),
+):
+    return ResearchController.update_research(db, research_id, research_update.model_dump(exclude_unset=True))
 
 
 @router.delete("/{research_id}")

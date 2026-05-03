@@ -585,6 +585,7 @@ class ResearchService:
         db: Session,
         user_id: int,
         title: str,
+        description: str | None,
         document_bytes: bytes,
         document_filename: str,
         document_content_type: str,
@@ -833,6 +834,28 @@ class ResearchService:
                 except Exception:
                     pass
             raise Exception(f"Error creating research: {error_msg}\nDetails: {tb}")
+
+    @staticmethod
+    def update_research(db: Session, research_id: int, updates: dict) -> dict:
+        try:
+            research = ResearchRepository.update(db, research_id, updates)
+            db.commit()
+            db.refresh(research)
+            
+            return {
+                "success": True,
+                "id": research.id,
+                "title": research.title,
+                "description": research.description,
+                "research_link": research.research_link,
+                "vector_link": research.vector_link,
+            }
+        except ValueError:
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise
 
     @staticmethod
     def delete_research(db: Session, research_id: int) -> bool:

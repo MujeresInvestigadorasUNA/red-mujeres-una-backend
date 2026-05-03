@@ -110,6 +110,7 @@ class ResearchController:
         db: Session,
         user_id: int,
         title: str,
+        description: str | None,
         document_bytes: bytes,
         document_filename: str,
         document_content_type: str,
@@ -119,6 +120,7 @@ class ResearchController:
                 db=db,
                 user_id=user_id,
                 title=title,
+                description=description,
                 document_bytes=document_bytes,
                 document_filename=document_filename,
                 document_content_type=document_content_type,
@@ -133,6 +135,15 @@ class ResearchController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=error_detail,
             )
+
+    @staticmethod
+    def update_research(db: Session, research_id: int, research_update: dict):
+        try:
+            return ResearchService.update_research(db, research_id, research_update)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
     async def create_research(
