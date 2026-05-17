@@ -6,7 +6,7 @@ import re
 import time
 import traceback
 from datetime import datetime
-from typing import List
+from typing import List, Any
 from urllib.parse import unquote, urlparse
 
 from fastapi import UploadFile
@@ -30,16 +30,32 @@ logger = logging.getLogger(__name__)
 
 class ResearchService:
     @staticmethod
-    def list_research(db: Session, skip: int = 0, limit: int = 50) -> list[Research]:
-        return ResearchRepository.list(db, skip=skip, limit=limit)
+    def list_research(
+        db: Session,
+        skip: int = 0,
+        limit: int = 50,
+        viewer_user_id: int | None = None,
+    ) -> list[dict]:
+        researches = ResearchRepository.list(db, skip=skip, limit=limit)
+        return ResearchService._attach_like_info(db, researches, viewer_user_id)
 
     @staticmethod
-    def get_research(db: Session, research_id: int) -> Research | None:
-        return ResearchRepository.get_by_id(db, research_id)
+    def get_research(
+        db: Session,
+        research_id: int,
+        viewer_user_id: int | None = None,
+    ) -> dict:
+        research = ResearchRepository.get_by_id(db, research_id)
+        return ResearchService._build_research_details(db, research, viewer_user_id)
 
     @staticmethod
-    def get_user_research(db: Session, user_id: int) -> list[Research]:
-        return ResearchRepository.get_by_user_id(db, user_id)
+    def get_user_research(
+        db: Session,
+        user_id: int,
+        viewer_user_id: int | None = None,
+    ) -> list[dict]:
+        researches = ResearchRepository.get_by_user_id(db, user_id)
+        return ResearchService._attach_like_info(db, researches, viewer_user_id)
 
     @staticmethod
     def register_research_visit(db: Session, user_id: int, research_id: int) -> dict:
@@ -194,6 +210,123 @@ class ResearchService:
             )
 
         return response
+
+    @staticmethod
+    def _attach_like_info(
+        db: Session,
+        researches: list[Research],
+        viewer_user_id: int | None,
+    ) -> list[dict]:
+        research_ids = [research.id for research in researches]
+        counts = ResearchLikesRepository.get_active_counts_by_research_ids(db, research_ids)
+
+        liked_set: set[int] = set()
+        if viewer_user_id is not None:
+            UsersRepository.get_by_id(db, viewer_user_id)
+            liked_set = ResearchLikesRepository.list_active_research_ids_by_user(
+                db,
+                user_id=viewer_user_id,
+                research_ids=research_ids,
+            )
+
+        response: list[dict] = []
+        for research in researches:
+            response.append(
+                ResearchService._serialize_research(
+                    research=research,
+                    likes_count=counts.get(research.id, 0),
+                    is_liked=research.id in liked_set if viewer_user_id is not None else None,
+                )
+            )
+
+        return response
+
+    @staticmethod
+    def _build_research_details(
+        db: Session,
+        research: Research,
+        viewer_user_id: int | None,
+    ) -> dict:
+        likes_count = ResearchLikesRepository.count_active_by_research(db, research.id)
+        is_liked = None
+        if viewer_user_id is not None:
+            UsersRepository.get_by_id(db, viewer_user_id)
+            is_liked = bool(
+                ResearchLikesRepository.list_active_research_ids_by_user(
+                    db,
+                    user_id=viewer_user_id,
+                    research_ids=[research.id],
+                )
+            )
+
+        return ResearchService._serialize_research(
+            research=research,
+            likes_count=likes_count,
+            is_liked=is_liked,
+        )
+
+    @staticmethod
+    def _safe_get_research_details(
+        db: Session,
+        research_id: int,
+        viewer_user_id: int | None,
+    ) -> dict | None:
+        try:
+            research = ResearchRepository.get_by_id(db, research_id)
+        except ValueError:
+            return None
+        return ResearchService._build_research_details(db, research, viewer_user_id)
+
+    @staticmethod
+    def _serialize_research(
+        research: Research,
+        likes_count: int,
+        is_liked: bool | None,
+    ) -> dict:
+        return {
+            "id": research.id,
+            "user_id": research.user_id,
+            "title": research.title,
+            "description": research.description,
+            "research_link": research.research_link,
+            "vector_link": research.vector_link,
+            "status": research.status,
+            "likes_count": likes_count,
+            "is_liked": is_liked,
+        }
+
+    @staticmethod
+    def _graph_node_from_research_details(details: dict, node_type: str) -> dict:
+        return {
+            "id": f"r:{details['id']}",
+            "label": details.get("title", "Unknown"),
+            "type": node_type,
+            "research_id": details.get("id"),
+            "user_id": details.get("user_id"),
+            "research_link": details.get("research_link"),
+            "vector_link": details.get("vector_link"),
+            "status": details.get("status"),
+            "likes_count": details.get("likes_count"),
+            "is_liked": details.get("is_liked"),
+        }
+
+    @staticmethod
+    def _graph_node_from_payload(
+        research_id: int | None,
+        title: str,
+        user_id: int | None,
+        research_link: str | None,
+        node_type: str,
+    ) -> dict:
+        node_id = f"r:{research_id}" if research_id is not None else f"r:unknown:{title}"
+        return {
+            "id": node_id,
+            "label": title,
+            "type": node_type,
+            "research_id": research_id,
+            "user_id": user_id,
+            "research_link": research_link,
+        }
 
     @staticmethod
     def _sanitize_title(title: str) -> str:
@@ -567,6 +700,204 @@ class ResearchService:
             log_context=f"interactions user_id={user_id}",
             source_weights=source_weights,
         )
+
+    @staticmethod
+    def get_research_similarity_graph(
+        db: Session,
+        research_id: int,
+        limit: int = 15,
+        min_score: float = 0.0,
+        viewer_user_id: int | None = None,
+    ) -> dict:
+        source_research = ResearchRepository.get_by_id(db, research_id)
+        source_details = ResearchService._build_research_details(db, source_research, viewer_user_id)
+        source_node = ResearchService._graph_node_from_research_details(source_details, node_type="source")
+
+        nodes_by_id: dict[str, dict[str, Any]] = {source_node["id"]: source_node}
+        edges: list[dict[str, Any]] = []
+
+        recommendations = ResearchService._get_qdrant_recommendations_from_source_ids(
+            source_research_ids={research_id},
+            exclude_research_ids={research_id},
+            limit=limit,
+            log_context=f"graph research_id={research_id}",
+            source_weights=None,
+        )
+
+        for rec in recommendations:
+            score = float(rec.get("similarity_score", 0.0))
+            if score < min_score:
+                continue
+
+            rec_id = rec.get("id")
+            node = None
+            if rec_id is not None:
+                details = ResearchService._safe_get_research_details(db, rec_id, viewer_user_id)
+                if details:
+                    node = ResearchService._graph_node_from_research_details(details, node_type="recommended")
+
+            if not node:
+                node = ResearchService._graph_node_from_payload(
+                    research_id=rec_id,
+                    title=rec.get("title", "Unknown"),
+                    user_id=rec.get("user_id"),
+                    research_link=rec.get("research_link"),
+                    node_type="recommended",
+                )
+
+            node_id = node["id"]
+            if node_id not in nodes_by_id:
+                nodes_by_id[node_id] = node
+
+            edges.append(
+                {
+                    "source": source_node["id"],
+                    "target": node_id,
+                    "weight": round(score, 6),
+                    "relation": "similarity",
+                }
+            )
+
+        return {
+            "meta": {
+                "source_research_id": research_id,
+                "limit": limit,
+                "min_score": min_score,
+                "distance": "cosine",
+                "embedding_model": settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+            },
+            "nodes": list(nodes_by_id.values()),
+            "edges": edges,
+        }
+
+    @staticmethod
+    def get_user_recommendation_graph(
+        db: Session,
+        user_id: int,
+        limit: int = 15,
+        min_score: float = 0.0,
+    ) -> dict:
+        UsersRepository.get_by_id(db, user_id)
+
+        visits = ResearchService.get_recent_research_visits(db, user_id=user_id, limit=5)
+        likes = ResearchService.get_recent_research_likes(db, user_id=user_id, limit=5)
+
+        visited_ids = {visit["research_id"] for visit in visits}
+        liked_ids = {like["research_id"] for like in likes}
+        source_ids = visited_ids | liked_ids
+
+        user_node = {
+            "id": f"u:{user_id}",
+            "label": f"User {user_id}",
+            "type": "user",
+            "user_id": user_id,
+        }
+
+        nodes_by_id: dict[str, dict[str, Any]] = {user_node["id"]: user_node}
+        edges: list[dict[str, Any]] = []
+
+        interaction_map: dict[int, dict[str, bool]] = {}
+        for visit in visits:
+            interaction_map.setdefault(visit["research_id"], {})["visit"] = True
+        for like in likes:
+            interaction_map.setdefault(like["research_id"], {})["like"] = True
+
+        for research_id, flags in interaction_map.items():
+            details = ResearchService._safe_get_research_details(db, research_id, viewer_user_id=user_id)
+            if details:
+                node = ResearchService._graph_node_from_research_details(details, node_type="source")
+            else:
+                fallback = None
+                for entry in visits + likes:
+                    if entry["research_id"] == research_id:
+                        fallback = entry
+                        break
+                node = ResearchService._graph_node_from_payload(
+                    research_id=research_id,
+                    title=fallback["title"] if fallback else "Unknown",
+                    user_id=fallback["user_id"] if fallback else None,
+                    research_link=fallback["research_link"] if fallback else None,
+                    node_type="source",
+                )
+
+            nodes_by_id.setdefault(node["id"], node)
+
+            weight = 0
+            if flags.get("visit"):
+                weight += 1
+            if flags.get("like"):
+                weight += 2
+
+            edges.append(
+                {
+                    "source": user_node["id"],
+                    "target": node["id"],
+                    "weight": float(weight),
+                    "relation": "interaction",
+                }
+            )
+
+        recommendations = []
+        if source_ids:
+            source_weights: dict[int, float] = {}
+            for research_id in visited_ids:
+                source_weights[research_id] = source_weights.get(research_id, 0.0) + 1.0
+            for research_id in liked_ids:
+                source_weights[research_id] = source_weights.get(research_id, 0.0) + 1.0
+
+            recommendations = ResearchService._get_qdrant_recommendations_from_source_ids(
+                source_research_ids=source_ids,
+                exclude_research_ids=source_ids,
+                limit=limit,
+                log_context=f"graph user_id={user_id}",
+                source_weights=source_weights,
+            )
+
+        for rec in recommendations:
+            score = float(rec.get("similarity_score", 0.0))
+            if score < min_score:
+                continue
+
+            rec_id = rec.get("id")
+            node = None
+            if rec_id is not None:
+                details = ResearchService._safe_get_research_details(db, rec_id, viewer_user_id=user_id)
+                if details:
+                    node = ResearchService._graph_node_from_research_details(details, node_type="recommended")
+
+            if not node:
+                node = ResearchService._graph_node_from_payload(
+                    research_id=rec_id,
+                    title=rec.get("title", "Unknown"),
+                    user_id=rec.get("user_id"),
+                    research_link=rec.get("research_link"),
+                    node_type="recommended",
+                )
+
+            nodes_by_id.setdefault(node["id"], node)
+            edges.append(
+                {
+                    "source": user_node["id"],
+                    "target": node["id"],
+                    "weight": round(score, 6),
+                    "relation": "recommendation",
+                }
+            )
+
+        return {
+            "meta": {
+                "user_id": user_id,
+                "limit": limit,
+                "min_score": min_score,
+                "distance": "cosine",
+                "embedding_model": settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+                "visit_count": len(visited_ids),
+                "like_count": len(liked_ids),
+                "source_count": len(source_ids),
+            },
+            "nodes": list(nodes_by_id.values()),
+            "edges": edges,
+        }
 
     @staticmethod
     def _get_qdrant_recommendations_from_source_ids(

@@ -68,6 +68,7 @@ Ejecuta:
 - `GET /research/user/{user_id}` → investigaciones por usuario.
 - `GET /research/{research_id}` → detalle de investigación.
 - `GET /research/{research_id}/related?limit=5` → investigaciones relacionadas por similitud vectorial (global en blobs embebidos).
+- `GET /research/{research_id}/similarity-graph?limit=15&min_score=0.0` → grafo de nodos (Qdrant) para visualizar recomendaciones desde una investigación.
 - `POST /research/user/{user_id}/visits/{research_id}` → registra una visita de investigación para el usuario (mantiene solo las últimas 5 visitas).
 - `GET /research/user/{user_id}/visits?limit=5` → lista las visitas recientes del usuario (máximo 5).
 - `GET /research/user/{user_id}/related-from-visits?limit=5` → recomendaciones basadas en similitud vectorial usando las últimas 5 visitas del usuario.
@@ -76,6 +77,7 @@ Ejecuta:
 - `GET /research/user/{user_id}/likes?limit=5` → lista los últimos likes activos del usuario (máximo 5).
 - `GET /research/user/{user_id}/likes/history?skip=0&limit=50` → lista historial completo de acciones like/unlike del usuario (paginado).
 - `GET /research/user/{user_id}/related-from-interactions?limit=5` → recomendaciones basadas en las últimas 5 visitas y últimos 5 likes del usuario.
+- `GET /research/user/{user_id}/recommendation-graph?limit=15&min_score=0.0` → grafo de nodos (Qdrant) con recomendaciones basadas en visitas y likes.
 - `POST /research/` → crear investigación con PDF (`multipart/form-data`: `user_id`, `title`, `document`).
 - `DELETE /research/{research_id}` → eliminar investigación.
 

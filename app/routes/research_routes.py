@@ -12,6 +12,7 @@ from app.schemas.research import (
     ResearchRecentLikeOut,
     ResearchLikeEventOut,
     ResearchUpdate,
+    ResearchGraphOut,
 )
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -21,19 +22,28 @@ router = APIRouter(prefix="/research", tags=["research"])
 def list_research(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    viewer_user_id: int | None = Query(None, description="User id to compute is_liked per research"),
     db: Session = Depends(get_db),
 ):
-    return ResearchController.list_research(db, skip=skip, limit=limit)
+    return ResearchController.list_research(db, skip=skip, limit=limit, viewer_user_id=viewer_user_id)
 
 
 @router.get("/user/{user_id}", response_model=list[ResearchDetailsOut])
-def list_user_research(user_id: int, db: Session = Depends(get_db)):
-    return ResearchController.get_user_research(db, user_id)
+def list_user_research(
+    user_id: int,
+    viewer_user_id: int | None = Query(None, description="User id to compute is_liked per research"),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_user_research(db, user_id, viewer_user_id=viewer_user_id)
 
 
 @router.get("/{research_id}", response_model=ResearchDetailsOut)
-def get_research(research_id: int, db: Session = Depends(get_db)):
-    return ResearchController.get_research(db, research_id)
+def get_research(
+    research_id: int,
+    viewer_user_id: int | None = Query(None, description="User id to compute is_liked for this research"),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_research(db, research_id, viewer_user_id=viewer_user_id)
 
 
 @router.get("/{research_id}/related", response_model=list[RelatedResearchOut])
@@ -43,6 +53,23 @@ def get_related_research(
     db: Session = Depends(get_db),
 ):
     return ResearchController.get_related_research(db, research_id=research_id, limit=limit)
+
+
+@router.get("/{research_id}/similarity-graph", response_model=ResearchGraphOut)
+def get_research_similarity_graph(
+    research_id: int,
+    limit: int = Query(15, ge=1, le=50),
+    min_score: float = Query(0.0, ge=0.0, le=1.0),
+    viewer_user_id: int | None = Query(None, description="User id to compute is_liked per research node"),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_research_similarity_graph(
+        db,
+        research_id=research_id,
+        limit=limit,
+        min_score=min_score,
+        viewer_user_id=viewer_user_id,
+    )
 
 
 @router.post("/user/{user_id}/visits/{research_id}", response_model=ResearchVisitRegisterOut)
@@ -116,6 +143,21 @@ def get_related_research_from_recent_interactions(
     db: Session = Depends(get_db),
 ):
     return ResearchController.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit)
+
+
+@router.get("/user/{user_id}/recommendation-graph", response_model=ResearchGraphOut)
+def get_user_recommendation_graph(
+    user_id: int,
+    limit: int = Query(15, ge=1, le=50),
+    min_score: float = Query(0.0, ge=0.0, le=1.0),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_user_recommendation_graph(
+        db,
+        user_id=user_id,
+        limit=limit,
+        min_score=min_score,
+    )
 
 
 @router.post("/", response_model=ResearchCreateResponse)

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from datetime import datetime
 
 
@@ -34,6 +34,8 @@ class ResearchCreateResponse(BaseModel):
 class ResearchDetailsOut(ResearchBase):
     id: int
     status: str = "ready"
+    likes_count: int = 0
+    is_liked: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -87,3 +89,29 @@ class ResearchLikeEventOut(BaseModel):
     research_link: str
     action: str
     created_at: datetime
+
+
+class ResearchGraphNodeOut(BaseModel):
+    id: str
+    label: str
+    type: str
+    research_id: Optional[int] = None
+    user_id: Optional[int] = None
+    research_link: Optional[str] = None
+    vector_link: Optional[str] = None
+    status: Optional[str] = None
+    likes_count: Optional[int] = None
+    is_liked: Optional[bool] = None
+
+
+class ResearchGraphEdgeOut(BaseModel):
+    source: str
+    target: str
+    weight: float
+    relation: Optional[str] = None
+
+
+class ResearchGraphOut(BaseModel):
+    meta: dict[str, Any]
+    nodes: list[ResearchGraphNodeOut]
+    edges: list[ResearchGraphEdgeOut]

@@ -9,21 +9,21 @@ logger = logging.getLogger(__name__)
 
 class ResearchController:
     @staticmethod
-    def list_research(db: Session, skip: int = 0, limit: int = 100):
-        return ResearchService.list_research(db, skip=skip, limit=limit)
+    def list_research(db: Session, skip: int = 0, limit: int = 100, viewer_user_id: int | None = None):
+        return ResearchService.list_research(db, skip=skip, limit=limit, viewer_user_id=viewer_user_id)
 
     @staticmethod
-    def get_research(db: Session, research_id: int):
+    def get_research(db: Session, research_id: int, viewer_user_id: int | None = None):
         try:
-            return ResearchService.get_research(db, research_id)
+            return ResearchService.get_research(db, research_id, viewer_user_id=viewer_user_id)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
-    def get_user_research(db: Session, user_id: int):
-        return ResearchService.get_user_research(db, user_id)
+    def get_user_research(db: Session, user_id: int, viewer_user_id: int | None = None):
+        return ResearchService.get_user_research(db, user_id, viewer_user_id=viewer_user_id)
 
     @staticmethod
     def get_related_research(db: Session, research_id: int, limit: int = 5):
@@ -101,6 +101,46 @@ class ResearchController:
     def get_related_research_from_recent_interactions(db: Session, user_id: int, limit: int = 4):
         try:
             return ResearchService.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_research_similarity_graph(
+        db: Session,
+        research_id: int,
+        limit: int = 15,
+        min_score: float = 0.0,
+        viewer_user_id: int | None = None,
+    ):
+        try:
+            return ResearchService.get_research_similarity_graph(
+                db,
+                research_id=research_id,
+                limit=limit,
+                min_score=min_score,
+                viewer_user_id=viewer_user_id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_user_recommendation_graph(
+        db: Session,
+        user_id: int,
+        limit: int = 15,
+        min_score: float = 0.0,
+    ):
+        try:
+            return ResearchService.get_user_recommendation_graph(
+                db,
+                user_id=user_id,
+                limit=limit,
+                min_score=min_score,
+            )
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         except Exception as e:
