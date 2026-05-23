@@ -37,4 +37,7 @@ qdrant-client>=1.10.1       # Cliente oficial de Qdrant para almacenar y consult
 # === PDF extraction ===
 pypdf>=4.2.0                # Extracción de texto de PDFs
 
+# === Vector projection (PCA) ===
+numpy>=1.26.4
+
 # - Instalación: pip install -r requirements.txt

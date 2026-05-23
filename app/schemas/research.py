@@ -35,6 +35,7 @@ class ResearchDetailsOut(ResearchBase):
     id: int
     status: str = "ready"
     likes_count: int = 0
+    visits_count: int = 0
     is_liked: Optional[bool] = None
 
     class Config:
@@ -91,6 +92,12 @@ class ResearchLikeEventOut(BaseModel):
     created_at: datetime
 
 
+class ResearchPdfUrlOut(BaseModel):
+    inline_url: str
+    download_url: str
+    expires_at: datetime
+
+
 class ResearchGraphNodeOut(BaseModel):
     id: str
     label: str
@@ -115,3 +122,27 @@ class ResearchGraphOut(BaseModel):
     meta: dict[str, Any]
     nodes: list[ResearchGraphNodeOut]
     edges: list[ResearchGraphEdgeOut]
+
+
+class ResearchEmbeddingPointOut(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    user_id: int
+    research_link: str
+    x: float
+    y: float
+    z: Optional[float] = None
+
+
+class ResearchEmbeddingEdgeOut(BaseModel):
+    source: int
+    target: int
+    weight: float
+    relation: str = "similarity"
+
+
+class ResearchEmbeddingMapOut(BaseModel):
+    meta: dict[str, Any]
+    points: list[ResearchEmbeddingPointOut]
+    edges: list[ResearchEmbeddingEdgeOut] = []

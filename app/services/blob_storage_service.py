@@ -7,9 +7,9 @@ import io
 import os
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import BinaryIO, Optional
-from azure.storage.blob import BlobServiceClient, ContainerClient
+from azure.storage.blob import BlobServiceClient, ContainerClient, BlobSasPermissions, generate_blob_sas
 from azure.core.exceptions import AzureError, ResourceNotFoundError
 from app.core.config import settings
 import logging
@@ -271,6 +271,92 @@ class BlobStorageService:
         except Exception as e:
             logger.error(f"Error inesperado listando archivos: {e}")
             raise
+
+    def generate_blob_sas_url(
+        self,
+        blob_name: str,
+        container_type: str = "documents",
+        expires_minutes: int = 30,
+        content_disposition: str | None = None,
+        content_type: str | None = None,
+    ) -> dict:
+        """
+        Genera una URL SAS temporal de solo lectura para un blob.
+
+        Args:
+            blob_name: Nombre del blob dentro del contenedor
+            container_type: Tipo de contenedor ('documents', 'images', 'vectorized')
+            expires_minutes: Tiempo de expiracion del SAS en minutos
+            content_disposition: Content-Disposition de respuesta (inline/attachment)
+            content_type: Content-Type de respuesta
+
+        Returns:
+            Dict con url y expires_at
+        """
+        if not self.account_name or not self.account_key:
+            raise ValueError("Azure Blob Storage credentials missing for SAS generation")
+
+        try:
+            container_map = {
+                "documents": settings.AZURE_BLOB_CONTAINER_DOCUMENTS,
+                "images": settings.AZURE_BLOB_CONTAINER_IMAGES,
+                "vectorized": settings.AZURE_BLOB_CONTAINER_VECTORIZED,
+            }
+            container_name = container_map.get(container_type, settings.AZURE_BLOB_CONTAINER_DOCUMENTS)
+            container_client = self._get_container_client(container_name)
+
+            # Validate blob existence to avoid issuing SAS for missing blobs
+            blob_client = container_client.get_blob_client(blob_name)
+            blob_client.get_blob_properties()
+
+            expires_at = datetime.utcnow() + timedelta(minutes=max(1, expires_minutes))
+            sas_token = generate_blob_sas(
+                account_name=self.account_name,
+                container_name=container_name,
+                blob_name=blob_name,
+                account_key=self.account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=expires_at,
+                content_disposition=content_disposition,
+                content_type=content_type,
+            )
+
+            url = f"https://{self.account_name}.blob.core.windows.net/{container_name}/{blob_name}?{sas_token}"
+            return {"url": url, "expires_at": expires_at}
+        except AzureError as e:
+            logger.error(f"Error generating SAS for {blob_name}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error generating SAS: {e}")
+            raise
+
+    def generate_blob_sas_urls(
+        self,
+        blob_name: str,
+        container_type: str = "documents",
+        expires_minutes: int = 30,
+        content_type: str | None = None,
+    ) -> dict:
+        """Genera URLs SAS para visualizacion inline y descarga."""
+        inline = self.generate_blob_sas_url(
+            blob_name=blob_name,
+            container_type=container_type,
+            expires_minutes=expires_minutes,
+            content_disposition="inline",
+            content_type=content_type,
+        )
+        download = self.generate_blob_sas_url(
+            blob_name=blob_name,
+            container_type=container_type,
+            expires_minutes=expires_minutes,
+            content_disposition="attachment",
+            content_type=content_type,
+        )
+        return {
+            "inline_url": inline["url"],
+            "download_url": download["url"],
+            "expires_at": inline["expires_at"],
+        }
 
 
 # Instancia singleton para usar en toda la app

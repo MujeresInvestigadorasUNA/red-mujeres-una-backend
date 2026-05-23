@@ -186,6 +186,39 @@ class QdrantService:
         )
         logger.info("Deleted Qdrant embeddings for research=%s", research_id)
 
+    def scroll_all_research_vectors(self) -> dict[int, list[list[float]]]:
+        """
+        Fetches all chunk vectors from Qdrant and groups them by research_id.
+        Returns {research_id: [vector, ...]} for centroid computation.
+        Single network call replaces N individual blob downloads.
+        """
+        client = self._require_client()
+        all_points: list[models.Record] = []
+        next_offset = None
+
+        while True:
+            batch, next_offset = client.scroll(
+                collection_name=self.collection_name,
+                limit=1000,
+                offset=next_offset,
+                with_payload=["research_id"],
+                with_vectors=True,
+            )
+            all_points.extend(batch)
+            if next_offset is None:
+                break
+
+        vectors_by_research: dict[int, list[list[float]]] = {}
+        for point in all_points:
+            if not point.vector or not point.payload:
+                continue
+            rid = point.payload.get("research_id")
+            if rid is None:
+                continue
+            vectors_by_research.setdefault(rid, []).append(point.vector)
+
+        return vectors_by_research
+
     def search_by_research_ids(
         self,
         research_ids: List[int],

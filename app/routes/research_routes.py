@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, Backgroun
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.controllers.research_controller import ResearchController
+from app.core.auth import require_token
 from app.schemas.research import (
     ResearchDetailsOut,
     ResearchCreateResponse,
@@ -13,6 +14,8 @@ from app.schemas.research import (
     ResearchLikeEventOut,
     ResearchUpdate,
     ResearchGraphOut,
+    ResearchPdfUrlOut,
+    ResearchEmbeddingMapOut,
 )
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -34,7 +37,19 @@ def list_user_research(
     viewer_user_id: int | None = Query(None, description="User id to compute is_liked per research"),
     db: Session = Depends(get_db),
 ):
+    if viewer_user_id is None:
+        viewer_user_id = user_id
     return ResearchController.get_user_research(db, user_id, viewer_user_id=viewer_user_id)
+
+
+@router.get("/embedding-map", response_model=ResearchEmbeddingMapOut)
+def get_research_embedding_map(
+    dim: int = Query(2, ge=2, le=3),
+    top_k: int = Query(0, ge=0, le=10, description="Top-k similar neighbours per point to draw as edges (0 = no edges)"),
+    min_score: float = Query(0.0, ge=0.0, le=1.0, description="Minimum cosine similarity to include an edge"),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_research_embedding_map(db, dim=dim, top_k=top_k, min_score=min_score)
 
 
 @router.get("/{research_id}", response_model=ResearchDetailsOut)
@@ -44,6 +59,21 @@ def get_research(
     db: Session = Depends(get_db),
 ):
     return ResearchController.get_research(db, research_id, viewer_user_id=viewer_user_id)
+
+
+@router.get("/{research_id}/pdf-url", response_model=ResearchPdfUrlOut)
+def get_research_pdf_url(
+    research_id: int,
+    expires_minutes: int = Query(30, ge=1, le=120),
+    token: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_research_pdf_url(
+        db,
+        research_id=research_id,
+        user_email=token.get("sub", ""),
+        expires_minutes=expires_minutes,
+    )
 
 
 @router.get("/{research_id}/related", response_model=list[RelatedResearchOut])

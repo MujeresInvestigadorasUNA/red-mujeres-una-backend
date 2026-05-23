@@ -22,6 +22,20 @@ class ResearchController:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
+    def get_research_pdf_url(db: Session, research_id: int, user_email: str, expires_minutes: int = 30):
+        try:
+            return ResearchService.get_research_pdf_url(
+                db,
+                research_id=research_id,
+                user_email=user_email,
+                expires_minutes=expires_minutes,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
     def get_user_research(db: Session, user_id: int, viewer_user_id: int | None = None):
         return ResearchService.get_user_research(db, user_id, viewer_user_id=viewer_user_id)
 
@@ -124,6 +138,13 @@ class ResearchController:
             )
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_research_embedding_map(db: Session, dim: int = 2, top_k: int = 0, min_score: float = 0.0):
+        try:
+            return ResearchService.get_research_embedding_map(db, dim=dim, top_k=top_k, min_score=min_score)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 

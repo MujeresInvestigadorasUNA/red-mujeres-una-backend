@@ -10,6 +10,7 @@ from typing import List, Any
 from urllib.parse import unquote, urlparse
 
 from fastapi import UploadFile
+import numpy as np
 from openai import AzureOpenAI, RateLimitError
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
@@ -49,6 +50,33 @@ class ResearchService:
         return ResearchService._build_research_details(db, research, viewer_user_id)
 
     @staticmethod
+    def get_research_pdf_url(
+        db: Session,
+        research_id: int,
+        user_email: str,
+        expires_minutes: int = 30,
+    ) -> dict:
+        user = UsersRepository.get_by_email(db, user_email)
+        if not user:
+            raise ValueError("User not found")
+        research = ResearchRepository.get_by_id(db, research_id)
+
+        blob_info = ResearchService._extract_blob_info(research.research_link)
+        if not blob_info:
+            raise ValueError("Invalid research link")
+
+        container_type, blob_name = blob_info
+        if container_type != "documents":
+            raise ValueError("Research document not found in documents container")
+
+        return blob_storage_service.generate_blob_sas_urls(
+            blob_name=blob_name,
+            container_type=container_type,
+            expires_minutes=expires_minutes,
+            content_type="application/pdf",
+        )
+
+    @staticmethod
     def get_user_research(
         db: Session,
         user_id: int,
@@ -68,7 +96,6 @@ class ResearchService:
                 user_id=user_id,
                 research_id=research_id,
             )
-            removed = ResearchVisitsRepository.delete_older_than_limit(db, user_id=user_id, keep_limit=5)
             db.commit()
 
             return {
@@ -76,7 +103,7 @@ class ResearchService:
                 "user_id": user_id,
                 "research_id": research_id,
                 "visited_at": visit.visited_at,
-                "removed_old_visits": removed,
+                "removed_old_visits": 0,
             }
         except ValueError:
             db.rollback()
@@ -218,7 +245,8 @@ class ResearchService:
         viewer_user_id: int | None,
     ) -> list[dict]:
         research_ids = [research.id for research in researches]
-        counts = ResearchLikesRepository.get_active_counts_by_research_ids(db, research_ids)
+        like_counts = ResearchLikesRepository.get_active_counts_by_research_ids(db, research_ids)
+        visit_counts = ResearchVisitsRepository.get_counts_by_research_ids(db, research_ids)
 
         liked_set: set[int] = set()
         if viewer_user_id is not None:
@@ -234,7 +262,8 @@ class ResearchService:
             response.append(
                 ResearchService._serialize_research(
                     research=research,
-                    likes_count=counts.get(research.id, 0),
+                    likes_count=like_counts.get(research.id, 0),
+                    visits_count=visit_counts.get(research.id, 0),
                     is_liked=research.id in liked_set if viewer_user_id is not None else None,
                 )
             )
@@ -248,6 +277,7 @@ class ResearchService:
         viewer_user_id: int | None,
     ) -> dict:
         likes_count = ResearchLikesRepository.count_active_by_research(db, research.id)
+        visits_count = ResearchVisitsRepository.count_by_research(db, research.id)
         is_liked = None
         if viewer_user_id is not None:
             UsersRepository.get_by_id(db, viewer_user_id)
@@ -262,6 +292,7 @@ class ResearchService:
         return ResearchService._serialize_research(
             research=research,
             likes_count=likes_count,
+            visits_count=visits_count,
             is_liked=is_liked,
         )
 
@@ -281,6 +312,7 @@ class ResearchService:
     def _serialize_research(
         research: Research,
         likes_count: int,
+        visits_count: int,
         is_liked: bool | None,
     ) -> dict:
         return {
@@ -292,6 +324,7 @@ class ResearchService:
             "vector_link": research.vector_link,
             "status": research.status,
             "likes_count": likes_count,
+            "visits_count": visits_count,
             "is_liked": is_liked,
         }
 
@@ -769,6 +802,131 @@ class ResearchService:
             "nodes": list(nodes_by_id.values()),
             "edges": edges,
         }
+
+    @staticmethod
+    def get_research_embedding_map(
+        db: Session,
+        dim: int = 2,
+        top_k: int = 0,
+        min_score: float = 0.0,
+    ) -> dict:
+        normalized_dim = 2 if dim not in (2, 3) else dim
+
+        if not qdrant_service.is_enabled:
+            return {
+                "meta": {"method": "pca", "dim": normalized_dim, "count": 0},
+                "points": [],
+                "edges": [],
+            }
+
+        researches = ResearchRepository.list_all(db)
+        if not researches:
+            return {
+                "meta": {"method": "pca", "dim": normalized_dim, "count": 0},
+                "points": [],
+                "edges": [],
+            }
+
+        research_meta: dict[int, dict[str, Any]] = {
+            r.id: {
+                "id": r.id,
+                "title": r.title,
+                "description": r.description,
+                "user_id": r.user_id,
+                "research_link": r.research_link,
+            }
+            for r in researches
+        }
+
+        vectors_by_research = qdrant_service.scroll_all_research_vectors()
+
+        points_meta: list[dict[str, Any]] = []
+        centroids: list[list[float]] = []
+
+        for rid, vectors in vectors_by_research.items():
+            if rid not in research_meta:
+                continue
+            centroid = ResearchService._centroid_embedding(vectors)
+            if not centroid:
+                continue
+            points_meta.append(research_meta[rid])
+            centroids.append(centroid)
+
+        if not centroids:
+            return {
+                "meta": {"method": "pca", "dim": normalized_dim, "count": 0},
+                "points": [],
+                "edges": [],
+            }
+
+        centroids_matrix = np.array(centroids, dtype=float)
+        projected = ResearchService._pca_project(centroids_matrix, normalized_dim)
+        points: list[dict[str, Any]] = []
+        for meta, coords in zip(points_meta, projected):
+            entry = {"x": float(coords[0]), "y": float(coords[1])}
+            if normalized_dim == 3:
+                entry["z"] = float(coords[2])
+            points.append({**meta, **entry})
+
+        edges: list[dict[str, Any]] = []
+        if top_k > 0 and len(centroids_matrix) > 1:
+            norms = np.linalg.norm(centroids_matrix, axis=1, keepdims=True)
+            norms = np.where(norms == 0, 1.0, norms)
+            normalized = centroids_matrix / norms
+            sim_matrix = normalized @ normalized.T
+
+            edge_map: dict[tuple[int, int], float] = {}
+            for i in range(len(points_meta)):
+                row = sim_matrix[i].copy()
+                row[i] = -2.0
+                top_indices = np.argsort(row)[::-1][:top_k]
+                for j in top_indices:
+                    score = float(sim_matrix[i, j])
+                    if score < min_score:
+                        continue
+                    pair = (min(i, j), max(i, j))
+                    if pair not in edge_map or score > edge_map[pair]:
+                        edge_map[pair] = score
+
+            edges = [
+                {
+                    "source": points_meta[i]["id"],
+                    "target": points_meta[j]["id"],
+                    "weight": round(score, 6),
+                    "relation": "similarity",
+                }
+                for (i, j), score in edge_map.items()
+            ]
+
+        return {
+            "meta": {
+                "method": "pca",
+                "dim": normalized_dim,
+                "count": len(points),
+                "top_k": top_k,
+                "min_score": min_score,
+                "embedding_model": settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+            },
+            "points": points,
+            "edges": edges,
+        }
+
+    @staticmethod
+    def _pca_project(matrix: np.ndarray, dim: int) -> np.ndarray:
+        if matrix.ndim != 2:
+            raise ValueError("Invalid embedding matrix")
+
+        if matrix.shape[0] == 1:
+            padded = np.zeros((1, dim), dtype=float)
+            padded[0, 0] = 0.0
+            return padded
+
+        centered = matrix - np.mean(matrix, axis=0, keepdims=True)
+        covariance = np.cov(centered, rowvar=False)
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        order = np.argsort(eigenvalues)[::-1]
+        components = eigenvectors[:, order[:dim]]
+        return centered @ components
 
     @staticmethod
     def get_user_recommendation_graph(

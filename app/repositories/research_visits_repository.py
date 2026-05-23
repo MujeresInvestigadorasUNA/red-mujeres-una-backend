@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.research_visits import ResearchVisit
@@ -44,6 +45,28 @@ class ResearchVisitsRepository:
             .limit(limit)
             .all()
         )
+
+    @staticmethod
+    def count_by_research(db: Session, research_id: int) -> int:
+        count = (
+            db.query(func.count(ResearchVisit.id))
+            .filter(ResearchVisit.research_id == research_id)
+            .scalar()
+        )
+        return int(count or 0)
+
+    @staticmethod
+    def get_counts_by_research_ids(db: Session, research_ids: list[int]) -> dict[int, int]:
+        if not research_ids:
+            return {}
+
+        rows = (
+            db.query(ResearchVisit.research_id, func.count(ResearchVisit.id))
+            .filter(ResearchVisit.research_id.in_(research_ids))
+            .group_by(ResearchVisit.research_id)
+            .all()
+        )
+        return {research_id: int(count or 0) for research_id, count in rows}
 
     @staticmethod
     def delete_older_than_limit(db: Session, user_id: int, keep_limit: int = 5):
