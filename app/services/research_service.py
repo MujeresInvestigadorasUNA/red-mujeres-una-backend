@@ -25,6 +25,7 @@ from app.repositories.research_likes_repository import ResearchLikesRepository
 from app.repositories.research_repository import ResearchRepository
 from app.repositories.research_visits_repository import ResearchVisitsRepository
 from app.repositories.users_repository import UsersRepository
+from app.schemas import research
 from app.services.blob_storage_service import blob_storage_service
 from app.services.qdrant_service import qdrant_service
 
@@ -671,13 +672,18 @@ class ResearchService:
         for research_id in liked_research_ids:
             source_weights[research_id] = source_weights.get(research_id, 0.0) + 1.0
 
-        return ResearchService._get_qdrant_recommendations_from_source_ids(
+        qdrant_results = ResearchService._get_qdrant_recommendations_from_source_ids(
             source_research_ids=source_research_ids,
             exclude_research_ids=source_research_ids,
             limit=limit,
             log_context=f"interactions user_id={user_id}",
             source_weights=source_weights,
         )
+
+        ordered_ids = [r["id"] for r in qdrant_results if r.get("id") is not None]
+        researches = ResearchRepository.get_by_ids(db, ordered_ids)
+
+        return ResearchService._attach_like_info(db, researches, viewer_user_id=user_id)
 
     @staticmethod
     def get_research_similarity_graph(

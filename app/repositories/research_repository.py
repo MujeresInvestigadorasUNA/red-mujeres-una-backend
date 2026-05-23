@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from sqlalchemy.orm import Session
 from app.models.research import Research
 
@@ -17,6 +19,14 @@ class ResearchRepository:
     @staticmethod
     def get_by_user_id(db: Session, user_id: int):
         return db.query(Research).filter(Research.user_id == user_id).all()
+
+    @staticmethod
+    def get_by_ids(db: Session, research_ids: list[int]) -> list[Research]:
+        if not research_ids:
+            return []
+        rows = db.query(Research).filter(Research.id.in_(research_ids)).all()
+        order_map = {rid: i for i, rid in enumerate(research_ids)}
+        return sorted(rows, key=lambda r: order_map.get(r.id, len(research_ids)))
 
     @staticmethod
     def list_all(db: Session):

@@ -166,11 +166,11 @@ def list_research_like_history(
     return ResearchController.get_research_like_history(db, user_id=user_id, skip=skip, limit=limit)
 
 
-@router.get("/user/{user_id}/related-from-interactions", response_model=list[RelatedResearchOut])
+@router.get("/user/{user_id}/related-from-interactions", response_model=list[ResearchDetailsOut])
 def get_related_research_from_recent_interactions(
     user_id: int,
     limit: int = Query(4, ge=1, le=20),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), 
 ):
     return ResearchController.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit)
 
