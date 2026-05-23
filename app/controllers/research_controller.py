@@ -40,9 +40,9 @@ class ResearchController:
         return ResearchService.get_user_research(db, user_id, viewer_user_id=viewer_user_id)
 
     @staticmethod
-    def get_related_research(db: Session, research_id: int, limit: int = 5):
+    def get_related_research(db: Session, research_id: int, limit: int = 5, viewer_user_id: int | None = None):
         try:
-            return ResearchService.get_related_research(db, research_id=research_id, limit=limit)
+            return ResearchService.get_related_research(db, research_id=research_id, limit=limit, viewer_user_id=viewer_user_id)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         except Exception as e:
@@ -112,9 +112,9 @@ class ResearchController:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
-    def get_related_research_from_recent_interactions(db: Session, user_id: int, limit: int = 4):
+    def get_related_research_from_recent_interactions(db: Session, user_id: int, limit: int = 4, viewer_user_id: int | None = None):
         try:
-            return ResearchService.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit)
+            return ResearchService.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit, viewer_user_id=viewer_user_id)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         except Exception as e:

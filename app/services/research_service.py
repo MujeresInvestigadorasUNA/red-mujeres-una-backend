@@ -603,15 +603,23 @@ class ResearchService:
             raise ValueError(f"Qdrant sync verification failed for research={research_id}")
 
     @staticmethod
-    def get_related_research(db: Session, research_id: int, limit: int = 5) -> list[dict]:
+    def get_related_research(
+        db: Session,
+        research_id: int,
+        limit: int = 5,
+        viewer_user_id: int | None = None,
+    ) -> list[dict]:
         ResearchRepository.get_by_id(db, research_id)
-        return ResearchService._get_qdrant_recommendations_from_source_ids(
+        qdrant_results = ResearchService._get_qdrant_recommendations_from_source_ids(
             source_research_ids={research_id},
             exclude_research_ids={research_id},
             limit=limit,
             log_context=f"related research_id={research_id}",
             source_weights=None,
         )
+        ordered_ids = [r["id"] for r in qdrant_results if r.get("id") is not None]
+        researches = ResearchRepository.get_by_ids(db, ordered_ids)
+        return ResearchService._attach_like_info(db, researches, viewer_user_id=viewer_user_id)
 
     @staticmethod
     def get_related_research_from_recent_visits(db: Session, user_id: int, limit: int = 5) -> list[dict]:
@@ -641,7 +649,12 @@ class ResearchService:
         )
 
     @staticmethod
-    def get_related_research_from_recent_interactions(db: Session, user_id: int, limit: int = 5) -> list[dict]:
+    def get_related_research_from_recent_interactions(
+        db: Session,
+        user_id: int,
+        limit: int = 5,
+        viewer_user_id: int | None = None,
+    ) -> list[dict]:
         UsersRepository.get_by_id(db, user_id)
 
         recent_visits = ResearchVisitsRepository.list_recent_by_user(db, user_id=user_id, limit=5)
@@ -683,7 +696,7 @@ class ResearchService:
         ordered_ids = [r["id"] for r in qdrant_results if r.get("id") is not None]
         researches = ResearchRepository.get_by_ids(db, ordered_ids)
 
-        return ResearchService._attach_like_info(db, researches, viewer_user_id=user_id)
+        return ResearchService._attach_like_info(db, researches, viewer_user_id=viewer_user_id)
 
     @staticmethod
     def get_research_similarity_graph(

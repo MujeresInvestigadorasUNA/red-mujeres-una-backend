@@ -76,13 +76,14 @@ def get_research_pdf_url(
     )
 
 
-@router.get("/{research_id}/related", response_model=list[RelatedResearchOut])
+@router.get("/{research_id}/related", response_model=list[ResearchDetailsOut])
 def get_related_research(
     research_id: int,
     limit: int = Query(5, ge=1, le=20),
+    viewer_user_id: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return ResearchController.get_related_research(db, research_id=research_id, limit=limit)
+    return ResearchController.get_related_research(db, research_id=research_id, limit=limit, viewer_user_id=viewer_user_id)
 
 
 @router.get("/{research_id}/similarity-graph", response_model=ResearchGraphOut)
@@ -170,9 +171,10 @@ def list_research_like_history(
 def get_related_research_from_recent_interactions(
     user_id: int,
     limit: int = Query(4, ge=1, le=20),
-    db: Session = Depends(get_db), 
+    viewer_user_id: int | None = Query(None),
+    db: Session = Depends(get_db),
 ):
-    return ResearchController.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit)
+    return ResearchController.get_related_research_from_recent_interactions(db, user_id=user_id, limit=limit, viewer_user_id=viewer_user_id)
 
 
 @router.get("/user/{user_id}/recommendation-graph", response_model=ResearchGraphOut)
