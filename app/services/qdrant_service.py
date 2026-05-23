@@ -2,6 +2,7 @@ import logging
 from uuid import NAMESPACE_URL, uuid5
 from typing import List
 
+import numpy as np
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -219,39 +220,22 @@ class QdrantService:
 
         return vectors_by_research
 
-    def search_by_research_ids(
+    def get_weighted_centroid(
         self,
         research_ids: List[int],
-        limit: int = 5,
-        exclude_research_ids: set | None = None,
         research_weights: dict[int, float] | None = None,
-    ) -> list[models.ScoredPoint]:
+    ) -> list[float] | None:
         """
-        Search for similar research documents based on a list of research IDs.
-        
-        1. Fetches all embeddings for the given research_ids
-        2. Computes centroid of those embeddings
-        3. Uses centroid to search for similar documents
-        4. Excludes the original research_ids from results
-        
-        Returns list of ScoredPoint sorted by similarity (highest first).
-        Optional research_weights allows weighted centroid calculation per source research_id.
+        Fetches chunk vectors for the given research_ids and returns a single
+        weighted centroid vector. Computed once and reused across query iterations.
+        Returns None when no vectors are found.
         """
-        if not self.is_enabled:
-            return []
-
-        if not research_ids:
-            return []
-
-        if exclude_research_ids is None:
-            exclude_research_ids = set(research_ids)
-
         client = self._require_client()
 
-        points = client.scroll(
+        points, _ = client.scroll(
             collection_name=self.collection_name,
             limit=10000,
-            with_payload=True,
+            with_payload=["research_id"],
             with_vectors=True,
             scroll_filter=models.Filter(
                 must=[
@@ -261,69 +245,94 @@ class QdrantService:
                     )
                 ]
             ),
-        )[0]
+        )
 
         if not points:
             logger.warning("No embeddings found for research_ids: %s", research_ids)
-            return []
+            return None
 
-        embeddings = [point.vector for point in points if point.vector]
-        if not embeddings:
-            logger.warning("No vectors found for research_ids: %s", research_ids)
-            return []
-
-        dimensionality = len(embeddings[0])
-        weighted_totals = [0.0] * dimensionality
-        total_weight = 0.0
+        vectors: list[list[float]] = []
+        weights: list[float] = []
 
         for point in points:
-            vector = point.vector
-            if not vector or len(vector) != dimensionality:
+            if not point.vector:
                 continue
-
             weight = 1.0
-            if research_weights:
-                payload = point.payload or {}
-                research_id = payload.get("research_id")
-                if research_id is not None:
-                    weight = float(research_weights.get(research_id, 1.0))
-
+            if research_weights and point.payload:
+                rid = point.payload.get("research_id")
+                if rid is not None:
+                    weight = float(research_weights.get(rid, 1.0))
             if weight <= 0:
                 continue
+            vectors.append(point.vector)
+            weights.append(weight)
 
-            total_weight += weight
-            for idx in range(dimensionality):
-                weighted_totals[idx] += float(vector[idx]) * weight
+        if not vectors:
+            logger.warning("No valid vectors for research_ids: %s", research_ids)
+            return None
 
-        if total_weight == 0:
-            logger.warning("Total weight is zero for research_ids: %s", research_ids)
-            return []
+        matrix = np.array(vectors, dtype=np.float32)
+        w = np.array(weights, dtype=np.float32)
+        centroid = np.average(matrix, axis=0, weights=w)
+        return centroid.tolist()
 
-        centroid = [value / total_weight for value in weighted_totals]
+    # Fields we actually use from each recommended chunk — avoids transferring
+    # chunk_text (can be large) and other fields we never read.
+    _REC_PAYLOAD_FIELDS = ["research_id", "title", "user_id", "research_link", "vector_link"]
 
-        exclude_research_ids_list = list(exclude_research_ids) if exclude_research_ids else []
+    def query_by_vector(
+        self,
+        vector: list[float],
+        limit: int,
+        exclude_research_ids: set[int] | None = None,
+    ) -> list[models.ScoredPoint]:
+        """
+        Searches Qdrant with a pre-computed vector. Only fetches the payload
+        fields needed for recommendation output — skips chunk_text and others.
+        """
+        client = self._require_client()
+
         search_filter = None
-        if exclude_research_ids_list:
+        if exclude_research_ids:
             search_filter = models.Filter(
                 must_not=[
                     models.FieldCondition(
                         key="research_id",
-                        match=models.MatchAny(any=exclude_research_ids_list),
+                        match=models.MatchAny(any=list(exclude_research_ids)),
                     )
                 ]
             )
 
         try:
-            search_results = client.query_points(
+            results = client.query_points(
                 collection_name=self.collection_name,
-                query=centroid,
+                query=vector,
                 query_filter=search_filter,
                 limit=limit,
+                with_payload=self._REC_PAYLOAD_FIELDS,
             )
-            return search_results.points
+            return results.points
         except Exception as e:
-            logger.warning("Error searching Qdrant by research_ids: %s", e)
+            logger.warning("Error querying Qdrant by vector: %s", e)
             return []
+
+    def search_by_research_ids(
+        self,
+        research_ids: List[int],
+        limit: int = 5,
+        exclude_research_ids: set | None = None,
+        research_weights: dict[int, float] | None = None,
+    ) -> list[models.ScoredPoint]:
+        """Convenience wrapper: computes centroid then queries. Use get_weighted_centroid +
+        query_by_vector directly when the centroid will be reused across multiple calls."""
+        if not self.is_enabled or not research_ids:
+            return []
+        if exclude_research_ids is None:
+            exclude_research_ids = set(research_ids)
+        centroid = self.get_weighted_centroid(research_ids, research_weights)
+        if centroid is None:
+            return []
+        return self.query_by_vector(centroid, limit, exclude_research_ids)
 
 
 qdrant_service = QdrantService()

@@ -1,0 +1,8 @@
+Collecting cachetools
+  Downloading cachetools-7.1.4-py3-none-any.whl.metadata (5.5 kB)
+Downloading cachetools-7.1.4-py3-none-any.whl (16 kB)
+Installing collected packages: cachetools
+Successfully installed cachetools-7.1.4
+
+[notice] A new release of pip is available: 24.0 -> 26.1.1
+[notice] To update, run: python.exe -m pip install --upgrade pip

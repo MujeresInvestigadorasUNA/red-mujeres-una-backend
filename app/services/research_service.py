@@ -3,12 +3,14 @@ import json
 import logging
 import math
 import re
+import threading
 import time
 import traceback
 from datetime import datetime
 from typing import List, Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
+from cachetools import TTLCache
 from fastapi import UploadFile
 import numpy as np
 from openai import AzureOpenAI, RateLimitError
@@ -27,6 +29,22 @@ from app.services.blob_storage_service import blob_storage_service
 from app.services.qdrant_service import qdrant_service
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# In-process TTL caches
+#
+# _rec_cache  — recommendations per unique (source_ids, weights, exclude, limit)
+#               TTL 120 s: fresh enough for UX, auto-invalidates when interactions
+#               change because the cache key encodes the actual source IDs.
+#
+# _map_cache  — embedding map per (dim, top_k, min_score)
+#               TTL 300 s: global view; invalidated explicitly on create/delete.
+# ---------------------------------------------------------------------------
+_rec_cache: TTLCache = TTLCache(maxsize=512, ttl=120)
+_rec_lock = threading.RLock()
+
+_map_cache: TTLCache = TTLCache(maxsize=16, ttl=300)
+_map_lock = threading.RLock()
 
 
 class ResearchService:
@@ -511,27 +529,6 @@ class ResearchService:
         return embeddings
 
     @staticmethod
-    def _extract_blob_name_from_url(blob_url: str) -> str:
-        parsed = urlparse(blob_url)
-        path_parts = parsed.path.lstrip("/").split("/", 1)
-        if len(path_parts) != 2:
-            raise ValueError("Invalid vector blob URL")
-        return unquote(path_parts[1])
-
-    @staticmethod
-    def _load_vector_payload(vector_url: str) -> dict:
-        blob_name = ResearchService._extract_blob_name_from_url(vector_url)
-        return ResearchService._load_vector_payload_from_blob_name(blob_name)
-
-    @staticmethod
-    def _load_vector_payload_from_blob_name(blob_name: str) -> dict:
-        payload_bytes = blob_storage_service.download_file(
-            blob_name=blob_name,
-            container_type="vectorized",
-        )
-        return json.loads(payload_bytes.decode("utf-8"))
-
-    @staticmethod
     def _centroid_embedding(embeddings: List[List[float]]) -> List[float]:
         if not embeddings:
             return []
@@ -606,66 +603,14 @@ class ResearchService:
 
     @staticmethod
     def get_related_research(db: Session, research_id: int, limit: int = 5) -> list[dict]:
-        source_research = ResearchRepository.get_by_id(db, research_id)
-        source_blob_name = ResearchService._extract_blob_name_from_url(source_research.vector_link)
-        source_payload = ResearchService._load_vector_payload(source_research.vector_link)
-        source_embeddings = source_payload.get("embeddings", [])
-
-        source_centroid = ResearchService._centroid_embedding(source_embeddings)
-        if not source_centroid:
-            return []
-
-        db_research_map: dict[str, Research] = {}
-        for db_research in ResearchRepository.list_all(db):
-            try:
-                db_blob_name = ResearchService._extract_blob_name_from_url(db_research.vector_link)
-                db_research_map[db_blob_name] = db_research
-            except Exception:
-                continue
-
-        vector_blobs = blob_storage_service.list_files(container_type="vectorized", prefix="research/")
-
-        scored: list[dict] = []
-        for blob_info in vector_blobs:
-            candidate_blob_name = blob_info.get("name")
-            if not candidate_blob_name or candidate_blob_name == source_blob_name:
-                continue
-
-            try:
-                candidate_payload = ResearchService._load_vector_payload_from_blob_name(candidate_blob_name)
-                candidate_centroid = ResearchService._centroid_embedding(candidate_payload.get("embeddings", []))
-                score = ResearchService._cosine_similarity(source_centroid, candidate_centroid)
-                if score <= 0:
-                    continue
-
-                mapped_research = db_research_map.get(candidate_blob_name)
-                payload_title = candidate_payload.get("title")
-                payload_user_id = candidate_payload.get("user_id")
-
-                title = payload_title or (mapped_research.title if mapped_research else candidate_blob_name)
-                user_id = payload_user_id if payload_user_id is not None else (mapped_research.user_id if mapped_research else None)
-                research_link = mapped_research.research_link if mapped_research else None
-                result_id = mapped_research.id if mapped_research else None
-
-                scored.append(
-                    {
-                        "id": result_id,
-                        "title": str(title),
-                        "user_id": user_id,
-                        "research_link": research_link,
-                        "vector_blob_name": candidate_blob_name,
-                        "similarity_score": round(score, 6),
-                    }
-                )
-            except Exception as e:
-                logger.warning(
-                    "Skipping candidate blob=%s while computing similarity: %s",
-                    candidate_blob_name,
-                    e,
-                )
-
-        scored.sort(key=lambda item: item["similarity_score"], reverse=True)
-        return scored[:limit]
+        ResearchRepository.get_by_id(db, research_id)
+        return ResearchService._get_qdrant_recommendations_from_source_ids(
+            source_research_ids={research_id},
+            exclude_research_ids={research_id},
+            limit=limit,
+            log_context=f"related research_id={research_id}",
+            source_weights=None,
+        )
 
     @staticmethod
     def get_related_research_from_recent_visits(db: Session, user_id: int, limit: int = 5) -> list[dict]:
@@ -819,6 +764,12 @@ class ResearchService:
                 "edges": [],
             }
 
+        map_cache_key = (normalized_dim, top_k, min_score)
+        with _map_lock:
+            cached_map = _map_cache.get(map_cache_key)
+        if cached_map is not None:
+            return cached_map
+
         researches = ResearchRepository.list_all(db)
         if not researches:
             return {
@@ -898,7 +849,7 @@ class ResearchService:
                 for (i, j), score in edge_map.items()
             ]
 
-        return {
+        map_result = {
             "meta": {
                 "method": "pca",
                 "dim": normalized_dim,
@@ -910,6 +861,9 @@ class ResearchService:
             "points": points,
             "edges": edges,
         }
+        with _map_lock:
+            _map_cache[map_cache_key] = map_result
+        return map_result
 
     @staticmethod
     def _pca_project(matrix: np.ndarray, dim: int) -> np.ndarray:
@@ -1068,53 +1022,63 @@ class ResearchService:
         if not source_research_ids:
             return []
 
+        # Cache key encodes exactly what determines the result. When the user adds
+        # a new interaction the source IDs change → different key → natural miss.
+        weights_key = frozenset(source_weights.items()) if source_weights else None
+        cache_key = (
+            frozenset(source_research_ids),
+            frozenset(exclude_research_ids),
+            limit,
+            weights_key,
+        )
+        with _rec_lock:
+            cached = _rec_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         try:
-            scored: list[dict] = []
-            seen_ids = set()
+            centroid = qdrant_service.get_weighted_centroid(
+                research_ids=list(source_research_ids),
+                research_weights=source_weights,
+            )
+            if centroid is None:
+                logger.warning("Could not compute centroid for %s", log_context)
+                return []
 
-            # Qdrant returns chunk-level points. Fetch in widening windows so we can
-            # deduplicate by research_id and still return enough unique recommendations.
-            candidate_limits = [max(20, limit * 5), max(100, limit * 25), max(300, limit * 60)]
+            # Single query: fetch limit*10 chunk-level results (capped at 500) and
+            # deduplicate by research_id client-side.
+            chunk_limit = min(limit * 10, 500)
+            search_results = qdrant_service.query_by_vector(
+                vector=centroid,
+                limit=chunk_limit,
+                exclude_research_ids=exclude_research_ids,
+            )
 
-            for qdrant_limit in candidate_limits:
-                if len(scored) >= limit:
-                    break
+            # Keep the highest-score chunk per research_id, then take the top `limit`.
+            best_per_research: dict[int, Any] = {}
+            for point in search_results:
+                rid = point.payload.get("research_id")
+                if rid is None:
+                    continue
+                if rid not in best_per_research or point.score > best_per_research[rid].score:
+                    best_per_research[rid] = point
 
-                search_results = qdrant_service.search_by_research_ids(
-                    research_ids=list(source_research_ids),
-                    limit=qdrant_limit,
-                    exclude_research_ids=exclude_research_ids,
-                    research_weights=source_weights,
-                )
+            top_points = sorted(best_per_research.values(), key=lambda p: p.score, reverse=True)[:limit]
 
-                for point in search_results:
-                    if len(scored) >= limit:
-                        break
-
-                    payload = point.payload
-                    research_id = payload.get("research_id")
-
-                    # Skip duplicates (same research_id, different chunks)
-                    if research_id in seen_ids:
-                        continue
-                    seen_ids.add(research_id)
-
-                    title = payload.get("title", "Unknown")
-                    user_id_from_payload = payload.get("user_id")
-                    research_link = payload.get("research_link")
-
-                    scored.append(
-                        {
-                            "id": research_id,
-                            "title": str(title),
-                            "user_id": user_id_from_payload,
-                            "research_link": research_link,
-                            "vector_blob_name": payload.get("vector_link", ""),
-                            "similarity_score": round(point.score, 6),
-                        }
-                    )
-
-            return scored
+            result = [
+                {
+                    "id": p.payload.get("research_id"),
+                    "title": str(p.payload.get("title", "Unknown")),
+                    "user_id": p.payload.get("user_id"),
+                    "research_link": p.payload.get("research_link"),
+                    "vector_blob_name": p.payload.get("vector_link", ""),
+                    "similarity_score": round(p.score, 6),
+                }
+                for p in top_points
+            ]
+            with _rec_lock:
+                _rec_cache[cache_key] = result
+            return result
         except Exception as e:
             logger.warning(
                 "Error searching Qdrant for recommendations (%s): %s",
@@ -1179,6 +1143,9 @@ class ResearchService:
             research.status = "processing"
             db.commit()
             db.refresh(research)
+
+            with _map_lock:
+                _map_cache.clear()
 
             return {
                 "success": True,
@@ -1625,6 +1592,9 @@ class ResearchService:
 
         if qdrant_service.is_enabled:
             qdrant_service.delete_research_embeddings(research_id)
+
+        with _map_lock:
+            _map_cache.clear()
 
         for link in (research.research_link, research.vector_link):
             blob_info = ResearchService._extract_blob_info(link)

@@ -40,4 +40,7 @@ pypdf>=4.2.0                # Extracción de texto de PDFs
 # === Vector projection (PCA) ===
 numpy>=1.26.4
 
+# === In-process TTL cache (recomendaciones, embedding map) ===
+cachetools>=5.3.0
+
 # - Instalación: pip install -r requirements.txt
