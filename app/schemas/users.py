@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -48,7 +49,11 @@ class UserOut(BaseModel):
 class UsersDetailsOut(UserBase):
     id: int
     user_type_id: int
-    password: str
 
     class Config:
         from_attributes = True
+
+
+class ProfilePictureUrlOut(BaseModel):
+    url: str
+    expires_at: datetime

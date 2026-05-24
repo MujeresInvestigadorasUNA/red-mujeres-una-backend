@@ -10,6 +10,7 @@ class UsersRepository:
     @staticmethod
     def get_by_id(db: Session, user_id: int):
         user = db.query(Users).filter(Users.id == user_id).first()
+        
         if not user:
             raise ValueError("User not found")
         return user
@@ -35,7 +36,7 @@ class UsersRepository:
         return user
 
     @staticmethod
-    def update(db: Session, user_id: int, email: str, first_name: str, last_name: str, password: str, photo: str, user_profession: str = None, user_description: str = None, is_public: bool = None):
+    def update(db: Session, user_id: int, email: str, first_name: str, last_name: str, password: str, photo: str, user_profession: str = None, user_description: str = None, is_public: bool = None, user_type_id: int = None):
         user = db.query(Users).filter(Users.id == user_id).first()
         if not user:
             raise ValueError("User not found")
@@ -44,7 +45,6 @@ class UsersRepository:
         user.first_name = first_name or user.first_name
         user.last_name = last_name or user.last_name
         user.password = password or user.password
-        user.photo = photo
         
         if user_profession is not None:
             user.user_profession = user_profession
@@ -52,7 +52,9 @@ class UsersRepository:
             user.user_description = user_description
         if is_public is not None:
             user.is_public = is_public
-        
+        if user_type_id is not None:
+            user.user_type_id = user_type_id
+
         db.commit()
         db.refresh(user)
         return True

@@ -155,6 +155,36 @@ class UsersService:
             raise Exception(f"Error registering user: {str(e)}")
 
     @staticmethod
+    def get_profile_picture_url(db: Session, user_id: int, expires_minutes: int = 60) -> dict:
+        from urllib.parse import urlparse
+        user = UsersRepository.get_by_id(db, user_id)
+        if not user.photo:
+            raise ValueError("User has no profile picture")
+
+        parsed = urlparse(user.photo)
+        path = parsed.path.lstrip("/")
+        parts = path.split("/", 1)
+        if len(parts) != 2:
+            raise ValueError("Invalid photo URL")
+
+        container_name, blob_name = parts
+        container_map = {
+            settings.AZURE_BLOB_CONTAINER_IMAGES: "images",
+            settings.AZURE_BLOB_CONTAINER_DOCUMENTS: "documents",
+        }
+        container_type = container_map.get(container_name)
+        if container_type != "images":
+            raise ValueError("Photo is not stored in the images container")
+
+        result = blob_storage_service.generate_blob_sas_url(
+            blob_name=blob_name,
+            container_type="images",
+            expires_minutes=expires_minutes,
+            content_type="image/jpeg",
+        )
+        return {"url": result["url"], "expires_at": result["expires_at"]}
+
+    @staticmethod
     async def update_user_profile_picture(
         db: Session,
         user_id: int,
@@ -278,7 +308,8 @@ class UsersService:
             photo=payload.photo,
             user_profession=payload.user_profession,
             user_description=payload.user_description,
-            is_public=payload.is_public
+            is_public=payload.is_public,
+            user_type_id=payload.user_type_id
         )
 
     @staticmethod

@@ -65,6 +65,15 @@ class UserController:
             )
 
     @staticmethod
+    def get_profile_picture_url(db: Session, user_id: int, expires_minutes: int = 60):
+        try:
+            return UsersService.get_profile_picture_url(db, user_id, expires_minutes)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
     async def update_profile_picture(
         db: Session,
         user_id: int,
