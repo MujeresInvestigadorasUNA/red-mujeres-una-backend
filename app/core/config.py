@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str | None = Field(None, validation_alias="AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
     AZURE_OPENAI_EMBEDDING_BATCH_SIZE: int = Field(10, validation_alias="AZURE_OPENAI_EMBEDDING_BATCH_SIZE")
 
+    # Firebase Admin
+    FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(None, validation_alias="FIREBASE_SERVICE_ACCOUNT_PATH")
+
     # Qdrant
     QDRANT_ENDPOINT: str | None = Field(None, validation_alias="QDRANT_ENDPOINT")
     QDRANT_API_KEY: str | None = Field(None, validation_alias="QDRANT_API_KEY")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, Body
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.auth import require_token
@@ -7,6 +7,14 @@ from app.schemas.users import UserCreate, UserUpdate, UserOut, UsersDetailsOut, 
 from typing import Optional
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.post("/cleanup-firebase")
+def cleanup_firebase_user(
+    email: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+):
+    return UserController.cleanup_firebase_user(db, email)
 
 @router.get("/", response_model=list[UsersDetailsOut])
 def list_users(

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.research import Research
+from app.repositories.research_authors_repository import ResearchAuthorsRepository
 from app.repositories.research_like_events_repository import ResearchLikeEventsRepository
 from app.repositories.research_likes_repository import ResearchLikesRepository
 from app.repositories.research_repository import ResearchRepository
@@ -1115,6 +1116,7 @@ class ResearchService:
         document_bytes: bytes,
         document_filename: str,
         document_content_type: str,
+        author_ids: list[int] | None = None,
     ) -> dict:
         """Create research record immediately, queue embeddings for background processing."""
         try:
@@ -1160,6 +1162,20 @@ class ResearchService:
             )
             # Set status to processing
             research.status = "processing"
+            db.flush()
+
+            # Add co-authors (skip invalid or duplicate ids silently)
+            if author_ids:
+                for uid in author_ids:
+                    if uid == user_id:
+                        continue
+                    try:
+                        UsersRepository.get_by_id(db, uid)
+                    except ValueError:
+                        continue
+                    if not ResearchAuthorsRepository.get_by_research_and_user(db, research.id, uid):
+                        ResearchAuthorsRepository.add(db, research.id, uid)
+
             db.commit()
             db.refresh(research)
 
@@ -1623,3 +1639,50 @@ class ResearchService:
             blob_storage_service.delete_file(blob_name=blob_name, container_type=container_type)
 
         return ResearchRepository.delete(db, research_id)
+
+    @staticmethod
+    def get_research_authors(db: Session, research_id: int) -> dict:
+        ResearchRepository.get_by_id(db, research_id)
+        rows = ResearchAuthorsRepository.get_by_research(db, research_id)
+        authors = [
+            {
+                "user_id": row.user.id,
+                "first_name": row.user.first_name,
+                "last_name": row.user.last_name,
+                "email": row.user.email,
+            }
+            for row in rows
+        ]
+        return {"research_id": research_id, "authors": authors}
+
+    @staticmethod
+    def add_research_authors(db: Session, research_id: int, user_ids: list[int]) -> dict:
+        ResearchRepository.get_by_id(db, research_id)
+        added, skipped, not_found = [], [], []
+        for uid in user_ids:
+            try:
+                UsersRepository.get_by_id(db, uid)
+            except ValueError:
+                not_found.append(uid)
+                continue
+            existing = ResearchAuthorsRepository.get_by_research_and_user(db, research_id, uid)
+            if existing:
+                skipped.append(uid)
+            else:
+                ResearchAuthorsRepository.add(db, research_id, uid)
+                added.append(uid)
+        db.commit()
+        return {"success": True, "research_id": research_id, "added": added, "skipped": skipped, "not_found": not_found}
+
+    @staticmethod
+    def remove_research_authors(db: Session, research_id: int, user_ids: list[int]) -> dict:
+        ResearchRepository.get_by_id(db, research_id)
+        removed, not_found = [], []
+        for uid in user_ids:
+            deleted = ResearchAuthorsRepository.remove(db, research_id, uid)
+            if deleted:
+                removed.append(uid)
+            else:
+                not_found.append(uid)
+        db.commit()
+        return {"success": True, "research_id": research_id, "removed": removed, "not_found": not_found}

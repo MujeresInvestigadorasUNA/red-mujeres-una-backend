@@ -52,6 +52,7 @@ class UsersService:
         Registra un usuario CON imagen de perfil.
         La imagen se sube a Blob Storage y se guarda la URL en BD.
         """
+        photo_blob_name = None
         try:
             # 1. Validar que el email no exista
             existing = UsersRepository.get_by_email(db, email)
@@ -64,7 +65,6 @@ class UsersService:
                 raise ValueError(f"User type {user_type_id} does not exist")
 
             # 2. Validar imagen (sin subir aún)
-            photo_blob_name = None
             photo_content = None
             photo_ext = ".jpg"
 
@@ -153,6 +153,19 @@ class UsersService:
                     pass  # Ignorar si no se puede eliminar
             
             raise Exception(f"Error registering user: {str(e)}")
+
+    @staticmethod
+    def cleanup_firebase_user(db: Session, email: str) -> dict:
+        """
+        Si el email NO existe en la BD, elimina el usuario temporal de Firebase.
+        Si SÍ existe, retorna conflict para que el frontend informe al usuario.
+        """
+        from app.core.firebase import delete_firebase_user_by_email
+        existing = UsersRepository.get_by_email(db, email)
+        if existing:
+            return {"status": "conflict", "message": "Email already registered"}
+        deleted = delete_firebase_user_by_email(email)
+        return {"status": "cleaned", "deleted": deleted}
 
     @staticmethod
     def get_profile_picture_url(db: Session, user_id: int, expires_minutes: int = 60) -> dict:

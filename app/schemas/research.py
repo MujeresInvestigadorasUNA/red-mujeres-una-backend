@@ -146,3 +146,31 @@ class ResearchEmbeddingMapOut(BaseModel):
     meta: dict[str, Any]
     points: list[ResearchEmbeddingPointOut]
     edges: list[ResearchEmbeddingEdgeOut] = []
+
+
+class ResearchAuthorOut(BaseModel):
+    user_id: int
+    first_name: str
+    last_name: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
+class ResearchAuthorsListOut(BaseModel):
+    research_id: int
+    authors: list[ResearchAuthorOut]
+
+
+class ResearchAuthorsActionOut(BaseModel):
+    success: bool
+    research_id: int
+    added: list[int] = []
+    skipped: list[int] = []
+    removed: list[int] = []
+    not_found: list[int] = []
+
+
+class ResearchAuthorsBulkRequest(BaseModel):
+    user_ids: list[int]

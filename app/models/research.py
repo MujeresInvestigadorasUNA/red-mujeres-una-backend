@@ -18,3 +18,4 @@ class Research(Base):
     visits = relationship("ResearchVisit", back_populates="research")
     likes = relationship("ResearchLike", back_populates="research")
     like_events = relationship("ResearchLikeEvent", back_populates="research")
+    authors = relationship("ResearchAuthor", back_populates="research", cascade="all, delete-orphan")

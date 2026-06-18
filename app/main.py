@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
 from app.models.user_types import UserType
+from app.models.research_authors import ResearchAuthor  # noqa: F401 — ensures table is created
 
 from app.routes.users_routes import router as users_router
 from app.routes.user_types_routes import router as user_types_router

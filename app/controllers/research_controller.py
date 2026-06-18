@@ -168,59 +168,6 @@ class ResearchController:
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
-    def create_research_sync(
-        db: Session,
-        user_id: int,
-        title: str,
-        description: str | None,
-        document_bytes: bytes,
-        document_filename: str,
-        document_content_type: str,
-        background_tasks: BackgroundTasks,
-    ):
-        try:
-            # Create research record immediately and return
-            result = ResearchService.create_research_with_pdf_immediate(
-                db=db,
-                user_id=user_id,
-                title=title,
-                description=description,
-                document_bytes=document_bytes,
-                document_filename=document_filename,
-                document_content_type=document_content_type,
-            )
-
-            # Queue background task to process embeddings
-            research_id = result["id"]
-            background_tasks.add_task(
-                ResearchService.process_research_embeddings_background,
-                research_id=research_id,
-                user_id=user_id,
-                title=title,
-                research_link=result["research_link"],
-                document_bytes=document_bytes,
-            )
-
-            return result
-        except RateLimitError as e:
-            retry_after = 60
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=str(e),
-                headers={"Retry-After": str(retry_after)},
-            )
-        except ValueError as e:
-            logger.warning(f"Validation error: {str(e)}")
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            error_detail = str(e) if str(e) else repr(e)
-            logger.error(f"Error in create_research: {error_detail}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error_detail,
-            )
-
-    @staticmethod
     def update_research(db: Session, research_id: int, research_update: dict):
         try:
             return ResearchService.update_research(db, research_id, research_update)
@@ -268,3 +215,83 @@ class ResearchController:
         if not ResearchService.delete_research(db, research_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research not found")
         return {"status": "ok"}
+
+    @staticmethod
+    def get_research_authors(db: Session, research_id: int):
+        try:
+            return ResearchService.get_research_authors(db, research_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def add_research_authors(db: Session, research_id: int, user_ids: list[int]):
+        try:
+            return ResearchService.add_research_authors(db, research_id, user_ids)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def remove_research_authors(db: Session, research_id: int, user_ids: list[int]):
+        try:
+            return ResearchService.remove_research_authors(db, research_id, user_ids)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def create_research_sync(
+        db: Session,
+        user_id: int,
+        title: str,
+        description: str | None,
+        document_bytes: bytes,
+        document_filename: str,
+        document_content_type: str,
+        background_tasks: BackgroundTasks,
+        author_ids: list[int] | None = None,
+    ):
+        try:
+            result = ResearchService.create_research_with_pdf_immediate(
+                db=db,
+                user_id=user_id,
+                title=title,
+                description=description,
+                document_bytes=document_bytes,
+                document_filename=document_filename,
+                document_content_type=document_content_type,
+                author_ids=author_ids,
+            )
+
+            research_id = result["id"]
+            background_tasks.add_task(
+                ResearchService.process_research_embeddings_background,
+                research_id=research_id,
+                user_id=user_id,
+                title=title,
+                research_link=result["research_link"],
+                document_bytes=document_bytes,
+            )
+
+            return result
+        except RateLimitError as e:
+            retry_after = 60
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(e),
+                headers={"Retry-After": str(retry_after)},
+            )
+        except ValueError as e:
+            logger.warning(f"Validation error: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            error_detail = str(e) if str(e) else repr(e)
+            logger.error(f"Error in create_research: {error_detail}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_detail,
+            )

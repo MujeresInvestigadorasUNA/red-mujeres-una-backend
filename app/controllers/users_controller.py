@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from app.services.users_service import UsersService
 from app.schemas.users import UserCreate, UserUpdate
 from typing import Optional
-import io
 
 
 class UserController:
@@ -63,6 +62,15 @@ class UserController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e)
             )
+
+    @staticmethod
+    def cleanup_firebase_user(db: Session, email: str):
+        try:
+            return UsersService.cleanup_firebase_user(db, email)
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
     def get_profile_picture_url(db: Session, user_id: int, expires_minutes: int = 60):

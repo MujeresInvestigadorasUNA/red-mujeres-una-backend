@@ -16,6 +16,9 @@ from app.schemas.research import (
     ResearchGraphOut,
     ResearchPdfUrlOut,
     ResearchEmbeddingMapOut,
+    ResearchAuthorsListOut,
+    ResearchAuthorsActionOut,
+    ResearchAuthorsBulkRequest,
 )
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -101,6 +104,7 @@ async def create_research(
     user_id: int = Form(...),
     title: str = Form(...),
     description: str = Form(None),
+    author_ids: list[int] = Form(default=[]),
     document: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     _: dict = Depends(require_token),
@@ -116,7 +120,36 @@ async def create_research(
         document_filename=document.filename,
         document_content_type=document.content_type,
         background_tasks=background_tasks,
+        author_ids=author_ids or None,
     )
+
+
+@router.get("/{research_id}/authors", response_model=ResearchAuthorsListOut)
+def get_research_authors(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    return ResearchController.get_research_authors(db, research_id)
+
+
+@router.post("/{research_id}/authors", response_model=ResearchAuthorsActionOut)
+def add_research_authors(
+    research_id: int,
+    body: ResearchAuthorsBulkRequest,
+    _: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.add_research_authors(db, research_id, body.user_ids)
+
+
+@router.delete("/{research_id}/authors", response_model=ResearchAuthorsActionOut)
+def remove_research_authors(
+    research_id: int,
+    body: ResearchAuthorsBulkRequest,
+    _: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    return ResearchController.remove_research_authors(db, research_id, body.user_ids)
 
 
 @router.put("/{research_id}", response_model=dict)
