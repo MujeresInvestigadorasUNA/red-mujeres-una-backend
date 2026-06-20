@@ -1,6 +1,6 @@
 """
 Azure Blob Storage service para gestionar documentos, imágenes y contenido vectorizado.
-Se usa internamente dentro de otros servicios (users_service, courses_service, etc).
+Se usa internamente dentro de otros servicios (users_service, event_service, etc).
 """
 
 import io

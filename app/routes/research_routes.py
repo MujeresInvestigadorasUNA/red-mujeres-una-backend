@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, Backgroun
 from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.controllers.research_controller import ResearchController
-from app.core.auth import require_token
+from app.core.auth import require_token, require_researcher_or_admin
 from app.schemas.research import (
     ResearchDetailsOut,
     ResearchCreateResponse,
@@ -107,7 +107,7 @@ async def create_research(
     author_ids: list[int] = Form(default=[]),
     document: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    _: dict = Depends(require_token),
+    _: dict = Depends(require_researcher_or_admin),
     db: Session = Depends(get_db),
 ):
     pdf_bytes = await document.read()

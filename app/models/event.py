@@ -2,8 +2,8 @@ from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, Date
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 
-class Courses(Base):
-    __tablename__ = "courses"
+class Event(Base):
+    __tablename__ = "event"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
@@ -18,7 +18,6 @@ class Courses(Base):
     max_registration_date = Column(Date, nullable=True)
     initial_date = Column(Date, nullable=True)
     final_date = Column(Date, nullable=True)
-    max_quotas = Column(Integer, nullable=True)
     is_public = Column(Boolean, default=False, nullable=False)
 
-    user = relationship("Users", back_populates="courses")
+    user = relationship("Users", back_populates="events")

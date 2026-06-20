@@ -335,6 +335,23 @@ class ResearchService:
         visits_count: int,
         is_liked: bool | None,
     ) -> dict:
+        owner = research.user
+        authors = [
+            {
+                "user_id": owner.id,
+                "first_name": owner.first_name,
+                "last_name": owner.last_name,
+                "email": owner.email,
+            }
+        ] + [
+            {
+                "user_id": ra.user.id,
+                "first_name": ra.user.first_name,
+                "last_name": ra.user.last_name,
+                "email": ra.user.email,
+            }
+            for ra in research.authors
+        ]
         return {
             "id": research.id,
             "user_id": research.user_id,
@@ -346,6 +363,7 @@ class ResearchService:
             "likes_count": likes_count,
             "visits_count": visits_count,
             "is_liked": is_liked,
+            "authors": authors,
         }
 
     @staticmethod

@@ -22,8 +22,8 @@ class Users(Base):
     # Define relationship to UserType
     user_type = relationship("UserType", back_populates="users")
 
-    # Relationship to Courses
-    courses = relationship("Courses", back_populates="user")
+    # Relationship to Events
+    events = relationship("Event", back_populates="user")
 
     # Relationship to Research
     researches = relationship("Research", back_populates="user")

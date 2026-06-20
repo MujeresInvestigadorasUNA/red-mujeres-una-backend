@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.models.research import Research
+from app.models.research_authors import ResearchAuthor
 
 
 class ResearchRepository:
@@ -18,7 +20,20 @@ class ResearchRepository:
 
     @staticmethod
     def get_by_user_id(db: Session, user_id: int):
-        return db.query(Research).filter(Research.user_id == user_id).all()
+        return (
+            db.query(Research)
+            .filter(
+                or_(
+                    Research.user_id == user_id,
+                    Research.id.in_(
+                        db.query(ResearchAuthor.research_id)
+                        .filter(ResearchAuthor.user_id == user_id)
+                    ),
+                )
+            )
+            .order_by(Research.id)
+            .all()
+        )
 
     @staticmethod
     def get_by_ids(db: Session, research_ids: list[int]) -> list[Research]:

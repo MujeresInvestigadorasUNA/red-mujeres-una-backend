@@ -3,10 +3,11 @@ from pydantic import BaseModel
 from typing import Optional
 from app.schemas.users import UserBase
 
-class CourseBase(BaseModel):
+
+class EventBase(BaseModel):
     id: int
     user: UserBase
-    user_id: int 
+    user_id: int
     title: Optional[str] = None
     photo: Optional[str] = None
     description: Optional[str] = None
@@ -14,10 +15,10 @@ class CourseBase(BaseModel):
     max_registration_date: Optional[date] = None
     initial_date: Optional[date] = None
     final_date: Optional[date] = None
-    max_quotas: Optional[int] = None
     is_public: bool = False
 
-class CourseByUserBase(BaseModel):
+
+class EventByUserBase(BaseModel):
     id: int
     title: Optional[str] = None
     photo: Optional[str] = None
@@ -26,16 +27,18 @@ class CourseByUserBase(BaseModel):
     max_registration_date: Optional[date] = None
     initial_date: Optional[date] = None
     final_date: Optional[date] = None
-    max_quotas: Optional[int] = None
     is_public: bool = False
 
-class CourseCreate(BaseModel):
+
+class EventCreate(BaseModel):
     user_id: int
 
-class CourseCreateResponse(BaseModel):
+
+class EventCreateResponse(BaseModel):
     id: int
 
-class CourseUpdate(BaseModel):
+
+class EventUpdate(BaseModel):
     title: Optional[str] = None
     photo: Optional[str] = None
     description: Optional[str] = None
@@ -43,13 +46,14 @@ class CourseUpdate(BaseModel):
     max_registration_date: Optional[date] = None
     initial_date: Optional[date] = None
     final_date: Optional[date] = None
-    max_quotas: Optional[int] = None
     is_public: bool = False
 
-class CourseUpdateResponse(BaseModel):
+
+class EventUpdateResponse(BaseModel):
     success: bool
 
-class CourseOut(CourseBase):
+
+class EventOut(EventBase):
     id: int
     taught_by: Optional[str] = None
 

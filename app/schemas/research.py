@@ -31,12 +31,23 @@ class ResearchCreateResponse(BaseModel):
     status: str = "processing"  # processing, ready, failed
 
 
+class ResearchAuthorOut(BaseModel):
+    user_id: int
+    first_name: str
+    last_name: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
 class ResearchDetailsOut(ResearchBase):
     id: int
     status: str = "ready"
     likes_count: int = 0
     visits_count: int = 0
     is_liked: Optional[bool] = None
+    authors: list[ResearchAuthorOut] = []
 
     class Config:
         from_attributes = True
@@ -146,16 +157,6 @@ class ResearchEmbeddingMapOut(BaseModel):
     meta: dict[str, Any]
     points: list[ResearchEmbeddingPointOut]
     edges: list[ResearchEmbeddingEdgeOut] = []
-
-
-class ResearchAuthorOut(BaseModel):
-    user_id: int
-    first_name: str
-    last_name: str
-    email: str
-
-    class Config:
-        from_attributes = True
 
 
 class ResearchAuthorsListOut(BaseModel):

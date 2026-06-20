@@ -91,3 +91,19 @@ def require_admin(
             detail="Admin privileges required",
         )
     return payload
+
+
+def require_researcher_or_admin(
+    payload: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.repositories.users_repository import UsersRepository
+
+    email = payload.get("sub", "")
+    user = UsersRepository.get_by_email(db, email)
+    if not user or user.user_type_id not in (2, 3):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Researcher or admin privileges required",
+        )
+    return payload
