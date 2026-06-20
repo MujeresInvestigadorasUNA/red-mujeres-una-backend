@@ -25,7 +25,10 @@ class UserUpdate(BaseModel):
     user_profession: Optional[str] = None
     user_description: Optional[str] = None
     is_public: Optional[bool] = None
-    user_type_id: Optional[int] = None
+
+
+class UserTypeUpdate(BaseModel):
+    user_type_id: int
 
 class UserUpdateResponse(BaseModel):
     success: bool

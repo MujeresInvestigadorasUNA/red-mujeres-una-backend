@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, Body
 from sqlalchemy.orm import Session
 from app.core.db import get_db
-from app.core.auth import require_token
+from app.core.auth import require_token, require_admin
 from app.controllers.users_controller import UserController
-from app.schemas.users import UserCreate, UserUpdate, UserOut, UsersDetailsOut, UserLogin, UserLoginResponse, UserUpdateResponse, ProfilePictureUrlOut
+from app.schemas.users import UserCreate, UserUpdate, UserTypeUpdate, UserOut, UsersDetailsOut, UserLogin, UserLoginResponse, UserUpdateResponse, ProfilePictureUrlOut
 from typing import Optional
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -19,7 +19,7 @@ def cleanup_firebase_user(
 @router.get("/", response_model=list[UsersDetailsOut])
 def list_users(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: Optional[int] = Query(None, ge=1),
     _: dict = Depends(require_token),
     db: Session = Depends(get_db),
 ):
@@ -30,7 +30,7 @@ def list_users(
 def get_researchers(
     is_public: bool = Query(False),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
 ):
     return UserController.get_researchers(db, is_public, skip, limit)
@@ -105,6 +105,16 @@ def update_user(
     db: Session = Depends(get_db),
 ):
     return UserController.update_user(db, user_id, payload)
+
+
+@router.put("/{user_id}/user-type", response_model=UserUpdateResponse)
+def update_user_type(
+    user_id: int,
+    payload: UserTypeUpdate,
+    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return UserController.update_user_type(db, user_id, payload.user_type_id)
 
 
 @router.delete("/{user_id}")

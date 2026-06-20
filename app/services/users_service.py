@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class UsersService:
     @staticmethod
-    def list_users(db: Session, skip: int = 0, limit: int = 50) -> list[Users]:
+    def list_users(db: Session, skip: int = 0, limit: int | None = None) -> list[Users]:
         return UsersRepository.list(db, skip=skip, limit=limit)
 
     @staticmethod
@@ -31,7 +31,7 @@ class UsersService:
         return UsersRepository.get_by_email(db, email)
 
     @staticmethod
-    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int = 50) -> list[Users]:
+    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int | None = None) -> list[Users]:
         """Get all researchers or only those that are public."""
         return UsersRepository.get_researchers(db, is_public_only, skip, limit)
 
@@ -322,8 +322,12 @@ class UsersService:
             user_profession=payload.user_profession,
             user_description=payload.user_description,
             is_public=payload.is_public,
-            user_type_id=payload.user_type_id
         )
+
+    @staticmethod
+    def update_user_type(db: Session, user_id: int, user_type_id: int):
+        UsersRepository.get_by_id(db, user_id)
+        return UsersRepository.update_user_type(db, user_id, user_type_id)
 
     @staticmethod
     def delete_user(db: Session, user_id: int) -> bool:

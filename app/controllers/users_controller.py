@@ -7,7 +7,7 @@ from typing import Optional
 
 class UserController:
     @staticmethod
-    def list_users(db: Session, skip: int = 0, limit: int = 100):
+    def list_users(db: Session, skip: int = 0, limit: int | None = None):
         return UsersService.list_users(db, skip, limit)
 
     @staticmethod
@@ -109,13 +109,23 @@ class UserController:
             raise HTTPException(status_code=400, detail=str(e))
 
     @staticmethod
+    def update_user_type(db: Session, user_id: int, user_type_id: int):
+        try:
+            UsersService.update_user_type(db, user_id, user_type_id)
+            return {"success": True}
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
     def delete_user(db: Session, user_id: int):
         if not UsersService.delete_user(db, user_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         return {"status": "ok"}
 
     @staticmethod
-    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int = 50):
+    def get_researchers(db: Session, is_public_only: bool = False, skip: int = 0, limit: int | None = None):
         """Get researchers (user_type_id = 2). Optionally filter by is_public = True."""
         return UsersService.get_researchers(db, is_public_only, skip, limit)
     

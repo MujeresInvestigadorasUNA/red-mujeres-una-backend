@@ -2,7 +2,9 @@ from datetime import datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.core.db import get_db
 from passlib.context import CryptContext
 
 # Use names defined in Settings
@@ -72,4 +74,20 @@ def require_token(
             detail="Invalid token payload",
         )
 
+    return payload
+
+
+def require_admin(
+    payload: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.repositories.users_repository import UsersRepository
+
+    email = payload.get("sub", "")
+    user = UsersRepository.get_by_email(db, email)
+    if not user or user.user_type_id != 3:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
     return payload
