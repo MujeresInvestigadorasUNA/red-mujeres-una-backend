@@ -16,6 +16,14 @@ def cleanup_firebase_user(
 ):
     return UserController.cleanup_firebase_user(db, email)
 
+
+@router.get("/exists")
+def user_exists(
+    email: str = Query(..., min_length=3),
+    db: Session = Depends(get_db),
+):
+    return UserController.exists(db, email)
+
 @router.get("/", response_model=list[UsersDetailsOut])
 def list_users(
     skip: int = Query(0, ge=0),

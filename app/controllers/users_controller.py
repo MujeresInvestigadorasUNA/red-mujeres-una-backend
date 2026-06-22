@@ -137,3 +137,11 @@ class UserController:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error")
+
+    @staticmethod
+    def exists(db: Session, email: str):
+        try:
+            existing = UsersService.get_by_email(db, email)
+            return {"exists": existing is not None}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
