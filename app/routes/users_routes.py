@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.auth import require_token, require_admin
 from app.controllers.users_controller import UserController
-from app.schemas.users import UserCreate, UserUpdate, UserTypeUpdate, UserOut, UsersDetailsOut, UserLogin, UserLoginResponse, UserUpdateResponse, ProfilePictureUrlOut
+from app.schemas.users import UserCreate, UserUpdate, UserTypeUpdate, UserOut, UsersDetailsOut, UserUpdateResponse, ProfilePictureUrlOut
 from typing import Optional
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -15,6 +15,20 @@ def cleanup_firebase_user(
     db: Session = Depends(get_db),
 ):
     return UserController.cleanup_firebase_user(db, email)
+
+
+@router.post("/password-reset")
+def send_password_reset(
+    email: str = Body(..., embed=True),
+):
+    return UserController.send_password_reset(email)
+
+
+@router.post("/email-verification")
+def send_email_verification(
+    email: str = Body(..., embed=True),
+):
+    return UserController.send_email_verification(email)
 
 
 @router.get("/exists")
@@ -44,6 +58,15 @@ def get_researchers(
     return UserController.get_researchers(db, is_public, skip, limit)
 
 
+@router.get("/by-email", response_model=UsersDetailsOut)
+def get_user_by_email(
+    email: str = Query(...),
+    _: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    return UserController.get_user_by_email(db, email)
+
+
 @router.get("/{user_id}", response_model=UsersDetailsOut)
 def get_user(
     user_id: int,
@@ -56,7 +79,6 @@ def get_user(
 @router.post("/register", status_code=201)
 async def register_user_with_photo(
     email: str = Form(...),
-    password: str = Form(...),
     first_name: str = Form(...),
     last_name: str = Form(...),
     user_type_id: int = Form(...),
@@ -69,7 +91,6 @@ async def register_user_with_photo(
     return await UserController.register_with_photo(
         db=db,
         email=email,
-        password=password,
         first_name=first_name,
         last_name=last_name,
         user_type_id=user_type_id,
@@ -134,6 +155,3 @@ def delete_user(
     return UserController.delete_user(db, user_id)
 
 
-@router.post("/login", response_model=UserLoginResponse)
-def login(user: UserLogin, db: Session = Depends(get_db)):
-    return UserController.login(db, user)

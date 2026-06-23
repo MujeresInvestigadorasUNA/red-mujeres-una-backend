@@ -16,6 +16,18 @@ class UserController:
             return UsersService.get_user(db, user_id)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def get_user_by_email(db: Session, email: str):
+        try:
+            user = UsersService.get_by_email(db, email)
+            if not user:
+                raise ValueError("User not found")
+            return user
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
         
     @staticmethod
     def create_user(db: Session, user: UserCreate):
@@ -30,7 +42,6 @@ class UserController:
     async def register_with_photo(
         db: Session,
         email: str,
-        password: str,
         first_name: str,
         last_name: str,
         user_type_id: int,
@@ -39,14 +50,10 @@ class UserController:
         user_description: Optional[str] = None,
         is_public: bool = False
     ):
-        """
-        Registra un usuario CON imagen de perfil.
-        """
         try:
             return await UsersService.register_user_with_image(
                 db=db,
                 email=email,
-                password=password,
                 first_name=first_name,
                 last_name=last_name,
                 user_type_id=user_type_id,
@@ -71,6 +78,20 @@ class UserController:
             raise HTTPException(status_code=503, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def send_password_reset(email: str):
+        try:
+            return UsersService.send_password_reset(email)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @staticmethod
+    def send_email_verification(email: str):
+        try:
+            return UsersService.send_email_verification(email)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @staticmethod
     def get_profile_picture_url(db: Session, user_id: int, expires_minutes: int = 60):
@@ -129,15 +150,6 @@ class UserController:
         """Get researchers (user_type_id = 2). Optionally filter by is_public = True."""
         return UsersService.get_researchers(db, is_public_only, skip, limit)
     
-    @staticmethod
-    def login(db: Session, user_login):
-        try:
-            return UsersService.login(db, user_login)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error")
-
     @staticmethod
     def exists(db: Session, email: str):
         try:

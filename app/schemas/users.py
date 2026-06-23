@@ -13,14 +13,12 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     email: EmailStr
-    password: str  # We will hash this password later
     user_type_id: int
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    password: Optional[str] = None
     photo: Optional[str] = None
     user_profession: Optional[str] = None
     user_description: Optional[str] = None
@@ -33,18 +31,8 @@ class UserTypeUpdate(BaseModel):
 class UserUpdateResponse(BaseModel):
     success: bool
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserLoginResponse(UserBase):
-    id: int
-    user_type_id: int
-    access_token: str
-
 class UserOut(BaseModel):
     id: int
-    access_token: str
 
     class Config:
         from_attributes = True

@@ -3,8 +3,6 @@ from app.repositories.users_repository import UsersRepository
 from app.repositories.user_types_repository import UserTypeRepository
 from app.schemas.users import UserCreate, UserUpdate
 from app.models.users import Users
-from datetime import timedelta
-from app.core.auth import create_access_token, hash_password, verify_password
 from app.core.config import settings
 from app.services.blob_storage_service import blob_storage_service
 from fastapi import UploadFile, HTTPException, status
@@ -39,7 +37,6 @@ class UsersService:
     async def register_user_with_image(
         db: Session,
         email: str,
-        password: str,
         first_name: str,
         last_name: str,
         user_type_id: int,
@@ -83,7 +80,6 @@ class UsersService:
             # 3. Crear usuario en BD (aún sin foto) para obtener el ID
             user = Users(
                 email=email,
-                password=hash_password(password),
                 first_name=first_name,
                 last_name=last_name,
                 user_type_id=user_type_id,
@@ -118,12 +114,6 @@ class UsersService:
             db.commit()
             db.refresh(user)
 
-            # 6. Generar token JWT
-            access_token = create_access_token(
-                data={"sub": user.email},
-                expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            )
-
             return {
                 "success": True,
                 "user": {
@@ -134,7 +124,6 @@ class UsersService:
                     "photo_url": user.photo,
                     "user_type_id": user.user_type_id
                 },
-                "access_token": access_token
             }
 
         except ValueError as e:
@@ -166,6 +155,18 @@ class UsersService:
             return {"status": "conflict", "message": "Email already registered"}
         deleted = delete_firebase_user_by_email(email)
         return {"status": "cleaned", "deleted": deleted}
+
+    @staticmethod
+    def send_password_reset(email: str) -> dict:
+        from app.core.firebase import generate_password_reset_link
+        link = generate_password_reset_link(email)
+        return {"success": True, "link": link}
+
+    @staticmethod
+    def send_email_verification(email: str) -> dict:
+        from app.core.firebase import generate_email_verification_link
+        link = generate_email_verification_link(email)
+        return {"success": True, "link": link}
 
     @staticmethod
     def get_profile_picture_url(db: Session, user_id: int, expires_minutes: int = 60) -> dict:
@@ -283,21 +284,11 @@ class UsersService:
         if not user_type:
             raise ValueError(f"User type {payload.user_type_id} does not exist")
     
-        # Hash password before creating user
-        payload.password = hash_password(payload.password)
         user = UsersRepository.create(db, payload)
-
-        # Persist the user to ensure the generated id is available
         db.commit()
         db.refresh(user)
 
-        # Create the JWT token
-        access_token_expires = timedelta(minutes=30)
-        access_token = create_access_token(
-            data={"sub": user.email}, expires_delta=access_token_expires
-        )
-
-        return { "id": user.id, "access_token": access_token }
+        return {"id": user.id}
 
     @staticmethod
     def update_user(db: Session, user_id: int, payload: UserUpdate) -> Users | None:
@@ -307,9 +298,6 @@ class UsersService:
             other = UsersRepository.get_by_email(db, payload.email)
             if other and other.id != user_id:
                 raise ValueError("Email already registered to another user")
-        
-        # Hash password if being updated
-        password_to_save = hash_password(payload.password) if payload.password else None
 
         return UsersRepository.update(
             db,
@@ -317,7 +305,6 @@ class UsersService:
             email=payload.email,
             first_name=payload.first_name,
             last_name=payload.last_name,
-            password=password_to_save,
             photo=payload.photo,
             user_profession=payload.user_profession,
             user_description=payload.user_description,
@@ -337,27 +324,3 @@ class UsersService:
         UsersRepository.delete(db, user)
         return True
 
-    @staticmethod
-    def login(db: Session, user_login) -> dict:
-        # Check if the user exists
-        user = UsersService.get_by_email(db, user_login.email)
-        
-        # Verify password (using bcrypt)
-        if user is None or not verify_password(user_login.password, user.password):
-            raise ValueError("Invalid credentials")
-
-        # Create the JWT token
-        access_token_expires = timedelta(minutes=30)
-        access_token = create_access_token(
-            data={"sub": user.email}, expires_delta=access_token_expires
-        )
-        
-        # Return user and token
-        return {
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "user_type_id": user.user_type_id,
-            "access_token": access_token,
-        }

@@ -25,10 +25,9 @@ class UsersRepository:
     @staticmethod
     def create(db: Session, payload: UserCreate):
         user = Users(
-            email=payload.email, 
-            first_name=payload.first_name, 
-            last_name=payload.last_name, 
-            password=payload.password, 
+            email=payload.email,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
             user_type_id=payload.user_type_id,
             user_profession=payload.user_profession,
             user_description=payload.user_description,
@@ -39,7 +38,7 @@ class UsersRepository:
         return user
 
     @staticmethod
-    def update(db: Session, user_id: int, email: str, first_name: str, last_name: str, password: str, photo: str, user_profession: str = None, user_description: str = None, is_public: bool = None):
+    def update(db: Session, user_id: int, email: str, first_name: str, last_name: str, photo: str, user_profession: str = None, user_description: str = None, is_public: bool = None):
         user = db.query(Users).filter(Users.id == user_id).first()
         if not user:
             raise ValueError("User not found")
@@ -47,7 +46,7 @@ class UsersRepository:
         user.email = email or user.email
         user.first_name = first_name or user.first_name
         user.last_name = last_name or user.last_name
-        user.password = password or user.password
+        user.photo = photo or user.photo
 
         if user_profession is not None:
             user.user_profession = user_profession

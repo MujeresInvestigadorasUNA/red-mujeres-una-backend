@@ -9,11 +9,6 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(True, validation_alias="DEBUG")
     API_V1_PREFIX: str = Field("/api/v1", validation_alias="API_V1_PREFIX")
 
-    # Security / JWT
-    JWT_SECRET: str = Field(..., validation_alias="JWT_SECRET")
-    JWT_ALG: str = Field("HS256", validation_alias="JWT_ALG")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES")
-
     # Legacy single DATABASE_URL (optional)
     DATABASE_URL: str = Field("sqlite:///./app.db", validation_alias="DATABASE_URL")
 

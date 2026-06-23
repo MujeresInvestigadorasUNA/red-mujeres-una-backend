@@ -19,6 +19,20 @@ def _initialize():
     _initialized = True
 
 
+def ensure_initialized():
+    _initialize()
+
+
+def generate_password_reset_link(email: str) -> str:
+    _initialize()
+    return firebase_auth.generate_password_reset_link(email)
+
+
+def generate_email_verification_link(email: str) -> str:
+    _initialize()
+    return firebase_auth.generate_email_verification_link(email)
+
+
 def delete_firebase_user_by_email(email: str) -> bool:
     """Delete a Firebase user by email. Returns True if deleted, False if not found."""
     _initialize()
