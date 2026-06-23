@@ -8,17 +8,14 @@ uvicorn[standard]>=0.30.0  # Servidor para FastAPI; [standard] trae uvloop/httpt
 SQLAlchemy>=2.0.30         # ORM/engine para conectar y consultar la base de datos
 
 # === Esquemas y configuración ===
-pydantic[email]>=2.7.0   # incluye dependencia opcional 'email-validator' para EmailStr            # Modelado/validación de datos (schemas de entrada/salida)
+pydantic[email]>=2.7.0     # Modelado/validación de datos; incluye email-validator para EmailStr
 pydantic-settings>=2.3.0   # Carga de settings desde variables de entorno/.env
 
-# === Autenticación ===
-python-jose>=3.3.0         # Manejo de JWT (firmar/verificar tokens)
-PyJWT>=2.7.0               # Biblioteca 'jwt' (import jwt) usada en app/core/auth.py
-passlib>=1.7.4             # Hash y verificación de contraseñas
-bcrypt>=4.0.1,<5.0.0       # Backend de bcrypt (compatible con passlib 1.7.4)
+# === Autenticación (Firebase) ===
+firebase-admin>=6.5.0      # Firebase Admin SDK: verificación de tokens, gestión de usuarios
 
 # === Forms/Uploads ===
-python-multipart>=0.0.9    # Soporte multipart/form-data (forms, uploads); opcional si no se usa
+python-multipart>=0.0.9    # Soporte multipart/form-data (forms, uploads)
 
 # === Drivers de base de datos (elegí según motor) ===
 PyMySQL>=1.1.0             # Driver para MySQL/MariaDB (p. ej., Azure Database for MySQL)
