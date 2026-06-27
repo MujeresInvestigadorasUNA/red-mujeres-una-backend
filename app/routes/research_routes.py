@@ -19,6 +19,8 @@ from app.schemas.research import (
     ResearchAuthorsListOut,
     ResearchAuthorsActionOut,
     ResearchAuthorsBulkRequest,
+    RAGQuestionRequest,
+    RAGAnswerOut,
 )
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -34,6 +36,16 @@ def list_research(
     db: Session = Depends(get_db),
 ):
     return ResearchController.list_research(db, skip=skip, limit=limit, viewer_user_id=viewer_user_id)
+
+
+@router.post("/ask", response_model=RAGAnswerOut)
+def ask_research(
+    body: RAGQuestionRequest,
+    _: dict = Depends(require_token),
+    db: Session = Depends(get_db),
+):
+    history = [msg.model_dump() for msg in body.history] if body.history else None
+    return ResearchController.ask(db=db, question=body.question, user_id=body.user_id, history=history)
 
 
 @router.get("/embedding-map", response_model=ResearchEmbeddingMapOut)

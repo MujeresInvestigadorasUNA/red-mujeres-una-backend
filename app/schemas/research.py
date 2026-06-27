@@ -175,3 +175,26 @@ class ResearchAuthorsActionOut(BaseModel):
 
 class ResearchAuthorsBulkRequest(BaseModel):
     user_ids: list[int]
+
+
+class RAGMessageHistory(BaseModel):
+    role: str
+    content: str
+
+
+class RAGQuestionRequest(BaseModel):
+    question: str
+    user_id: Optional[int] = None
+    history: list[RAGMessageHistory] = []
+
+
+class RAGSourceOut(BaseModel):
+    research_id: int
+    title: str
+    user_id: Optional[int] = None
+    score: float
+
+
+class RAGAnswerOut(BaseModel):
+    answer: str
+    sources: list[RAGSourceOut]

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str | None = Field(None, validation_alias="AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
     AZURE_OPENAI_EMBEDDING_BATCH_SIZE: int = Field(10, validation_alias="AZURE_OPENAI_EMBEDDING_BATCH_SIZE")
 
+    # Azure OpenAI (Chat / RAG)
+    AZURE_OPENAI_CHAT_DEPLOYMENT: str | None = Field(None, validation_alias="AZURE_OPENAI_CHAT_DEPLOYMENT")
+    AZURE_OPENAI_CHAT_ENDPOINT: str | None = Field(None, validation_alias="AZURE_OPENAI_CHAT_ENDPOINT")
+    AZURE_OPENAI_CHAT_API_KEY: str | None = Field(None, validation_alias="AZURE_OPENAI_CHAT_API_KEY")
+
     # Firebase Admin
     FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(None, validation_alias="FIREBASE_SERVICE_ACCOUNT_PATH")
 

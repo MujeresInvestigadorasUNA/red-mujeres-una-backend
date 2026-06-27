@@ -3,6 +3,7 @@ import logging
 from openai import RateLimitError
 from sqlalchemy.orm import Session
 from app.services.research_service import ResearchService
+from app.services.rag_service import RAGService
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +241,15 @@ class ResearchController:
             return ResearchService.remove_research_authors(db, research_id, user_ids)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @staticmethod
+    def ask(db, question: str, user_id: int | None = None, history: list[dict] | None = None):
+        try:
+            return RAGService.ask(question=question, db=db, user_id=user_id, history=history)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 

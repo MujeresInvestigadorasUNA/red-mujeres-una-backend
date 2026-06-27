@@ -316,6 +316,26 @@ class QdrantService:
             logger.warning("Error querying Qdrant by vector: %s", e)
             return []
 
+    _RAG_PAYLOAD_FIELDS = ["research_id", "title", "user_id", "chunk_text"]
+
+    def query_by_vector_for_rag(
+        self,
+        vector: list[float],
+        limit: int,
+    ) -> list[models.ScoredPoint]:
+        client = self._require_client()
+        try:
+            results = client.query_points(
+                collection_name=self.collection_name,
+                query=vector,
+                limit=limit,
+                with_payload=self._RAG_PAYLOAD_FIELDS,
+            )
+            return results.points
+        except Exception as e:
+            logger.warning("Error querying Qdrant for RAG: %s", e)
+            return []
+
     def search_by_research_ids(
         self,
         research_ids: List[int],
