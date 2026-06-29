@@ -1,0 +1,12 @@
+.env
+*.env
+.env.*
+__pycache__
+*.pyc
+.venv
+.git
+.gitignore
+*.md
+*.db
+*.json
+!requirements.txt
