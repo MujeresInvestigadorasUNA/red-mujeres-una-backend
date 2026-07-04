@@ -12,9 +12,13 @@ def _initialize():
     global _initialized
     if _initialized:
         return
-    if not settings.FIREBASE_SERVICE_ACCOUNT_PATH:
-        raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_PATH is not configured")
-    cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
+    if settings.FIREBASE_SERVICE_ACCOUNT_JSON:
+        import json
+        cred = credentials.Certificate(json.loads(settings.FIREBASE_SERVICE_ACCOUNT_JSON))
+    elif settings.FIREBASE_SERVICE_ACCOUNT_PATH:
+        cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
+    else:
+        raise RuntimeError("Firebase credentials not configured")
     firebase_admin.initialize_app(cred)
     _initialized = True
 

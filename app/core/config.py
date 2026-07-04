@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     # Firebase Admin
     FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(None, validation_alias="FIREBASE_SERVICE_ACCOUNT_PATH")
+    FIREBASE_SERVICE_ACCOUNT_JSON: str | None = Field(None, validation_alias="FIREBASE_SERVICE_ACCOUNT_JSON")
 
     # Qdrant
     QDRANT_ENDPOINT: str | None = Field(None, validation_alias="QDRANT_ENDPOINT")
