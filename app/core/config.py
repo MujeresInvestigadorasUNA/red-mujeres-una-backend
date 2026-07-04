@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     QDRANT_RESEARCH_COLLECTION: str = Field("research-embeddings", validation_alias="QDRANT_RESEARCH_COLLECTION")
     QDRANT_TIMEOUT_SECONDS: int = Field(30, validation_alias="QDRANT_TIMEOUT_SECONDS")
 
+    # CORS
+    ALLOW_ORIGINS: str | None = Field(None, validation_alias="ALLOW_ORIGINS")
+
     class Config:
         env_file = ".env"
         extra = "ignore"
