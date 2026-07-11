@@ -28,7 +28,7 @@ router = APIRouter(prefix="/research", tags=["research"])
 
 # ── Public endpoints ──────────────────────────────────────────────────────────
 
-@router.get("/", response_model=list[ResearchDetailsOut])
+@router.get("", response_model=list[ResearchDetailsOut])
 def list_research(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),

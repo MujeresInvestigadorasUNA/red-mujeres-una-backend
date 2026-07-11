@@ -38,7 +38,7 @@ def user_exists(
 ):
     return UserController.exists(db, email)
 
-@router.get("/", response_model=list[UsersDetailsOut])
+@router.get("", response_model=list[UsersDetailsOut])
 def list_users(
     skip: int = Query(0, ge=0),
     limit: Optional[int] = Query(None, ge=1),
@@ -101,7 +101,7 @@ async def register_user_with_photo(
     )
 
 
-@router.post("/", response_model=UserOut, status_code=201)
+@router.post("", response_model=UserOut, status_code=201)
 def create_user(payload: UserCreate, db: Session = Depends(get_db)):
     return UserController.create_user(db, payload)
 

@@ -10,7 +10,7 @@ router = APIRouter(prefix="/user_types", tags=["user_types"])
 
 # ── Public endpoints ──────────────────────────────────────────────────────────
 
-@router.get("/", response_model=list[UserTypeOut])
+@router.get("", response_model=list[UserTypeOut])
 def get_user_types(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return UserTypeController.get_all(db, skip, limit)
 
@@ -22,7 +22,7 @@ def get_user_type(user_type_id: int, db: Session = Depends(get_db)):
 
 # ── Protected endpoints ───────────────────────────────────────────────────────
 
-@router.post("/", response_model=UserTypeOut, status_code=201)
+@router.post("", response_model=UserTypeOut, status_code=201)
 def create_user_type(
     user_type: UserTypeBase,
     _: dict = Depends(require_token),

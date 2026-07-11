@@ -10,7 +10,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 # ── Public endpoints ──────────────────────────────────────────────────────────
 
-@router.get("/", response_model=list[EventBase])
+@router.get("", response_model=list[EventBase])
 def list_events(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -44,7 +44,7 @@ def get_user_events(
     return EventController.get_user_events(db, user_id)
 
 
-@router.post("/", response_model=EventCreateResponse, status_code=201)
+@router.post("", response_model=EventCreateResponse, status_code=201)
 def create_event(
     payload: EventCreate,
     _: dict = Depends(require_researcher_or_admin),
