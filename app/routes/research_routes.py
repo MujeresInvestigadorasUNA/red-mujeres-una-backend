@@ -111,7 +111,7 @@ def get_research_pdf_url(
     )
 
 
-@router.post("/", response_model=ResearchCreateResponse)
+@router.post("", response_model=ResearchCreateResponse)
 async def create_research(
     user_id: int = Form(...),
     title: str = Form(...),
