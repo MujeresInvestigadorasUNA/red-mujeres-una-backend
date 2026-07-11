@@ -12,6 +12,16 @@ def _initialize():
     global _initialized
     if _initialized:
         return
+    
+    # Check if Firebase app is already initialized
+    try:
+        firebase_admin.get_app()
+        _initialized = True
+        return
+    except ValueError:
+        # App is not initialized yet, proceed
+        pass
+    
     if settings.FIREBASE_SERVICE_ACCOUNT_JSON:
         import json
         cred = credentials.Certificate(json.loads(settings.FIREBASE_SERVICE_ACCOUNT_JSON))
@@ -19,7 +29,14 @@ def _initialize():
         cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
     else:
         raise RuntimeError("Firebase credentials not configured")
-    firebase_admin.initialize_app(cred)
+    
+    try:
+        firebase_admin.initialize_app(cred)
+    except ValueError as e:
+        # Handle case where app already exists
+        if "already exists" not in str(e):
+            raise
+    
     _initialized = True
 
 
